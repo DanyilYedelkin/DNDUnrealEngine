@@ -8,6 +8,8 @@
 #include "InputActionValue.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
+#include "Blueprint/AIBlueprintHelperLibrary.h"
+#include "Blueprint/AIBlueprintHelperLibrary.h"
 
 ACombatPlayerController::ACombatPlayerController()
 {
@@ -19,21 +21,16 @@ ACombatPlayerController::ACombatPlayerController()
 void ACombatPlayerController::BeginPlay()
 {
     Super::BeginPlay();
-
-    // Enhanced Input setup is handled in Blueprint
-    // You can also add mapping context here if needed
 }
 
 void ACombatPlayerController::SetupInputComponent()
 {
     Super::SetupInputComponent();
 
-    // Cast to Enhanced Input Component
     UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent);
     
     if (EnhancedInput)
     {
-        // Bind combat actions only if they are assigned
         if (IA_CombatSelect)
         {
             EnhancedInput->BindAction(IA_CombatSelect, ETriggerEvent::Triggered, 
@@ -66,7 +63,6 @@ void ACombatPlayerController::SetupInputComponent()
 
 void ACombatPlayerController::OnCombatSelectTriggered(const FInputActionValue& Value)
 {
-    // This will be called when IA_CombatSelect is triggered
     HandleCombatClick();
 }
 
@@ -77,7 +73,6 @@ void ACombatPlayerController::OnEndTurnTriggered(const FInputActionValue& Value)
 
 void ACombatPlayerController::OnAttackTriggered(const FInputActionValue& Value)
 {
-    // Quick attack with selected character
     if (SelectedCharacter)
     {
         ACombatCharacter* Target = GetCharacterUnderCursor();
@@ -104,20 +99,31 @@ void ACombatPlayerController::SelectCharacter(ACombatCharacter* CombatChar)
         return;
     }
 
-    // Deselect previous character
+    // Deselect previous
     if (SelectedCharacter)
     {
         SelectedCharacter->SetSelected(false);
+        SelectedCharacter->OnMovementComplete.RemoveDynamic(this, &ACombatPlayerController::OnCharacterMovementComplete);
     }
 
-    // Select new character
+    // Select new
     SelectedCharacter = CombatChar;  
     SelectedCharacter->SetSelected(true);
+    
+    // Subscribe to movement events
+    SelectedCharacter->OnMovementComplete.AddDynamic(this, &ACombatPlayerController::OnCharacterMovementComplete);
 
     if (GEngine)
     {
+        FString MovementInfo = "";
+        if (bIsInCombatMode && SelectedCharacter->bIsMyTurn)
+        {
+            MovementInfo = FString::Printf(TEXT(" | Movement: %.0f"), 
+                SelectedCharacter->RemainingMovementDistance);
+        }
+        
         GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,
-            FString::Printf(TEXT("Selected: %s"), *CombatChar->GetName()));  
+            FString::Printf(TEXT("Selected: %s%s"), *CombatChar->GetName(), *MovementInfo));
     }
 }
 
@@ -126,6 +132,7 @@ void ACombatPlayerController::DeselectCharacter()
     if (SelectedCharacter)
     {
         SelectedCharacter->SetSelected(false);
+        SelectedCharacter->OnMovementComplete.RemoveDynamic(this, &ACombatPlayerController::OnCharacterMovementComplete);
         SelectedCharacter = nullptr;
     }
 }
@@ -147,7 +154,6 @@ void ACombatPlayerController::RequestAttack(ACombatCharacter* Target)
         return;
     }
 
-    // Check if in combat mode
     if (!bIsInCombatMode)
     {
         if (GEngine)
@@ -158,7 +164,6 @@ void ACombatPlayerController::RequestAttack(ACombatCharacter* Target)
         return;
     }
 
-    // Check if can take action
     if (!SelectedCharacter->CanTakeAction())
     {
         if (GEngine)
@@ -173,6 +178,39 @@ void ACombatPlayerController::RequestAttack(ACombatCharacter* Target)
     if (SelectedCharacter->ActionComponent)
     {
         SelectedCharacter->ActionComponent->ExecuteAction(EActionType::Attack, Target);
+    }
+}
+
+void ACombatPlayerController::RequestMovement(const FVector& TargetLocation)
+{
+    if (!SelectedCharacter)
+    {
+        return;
+    }
+
+    if (!bIsInCombatMode)
+    {
+        // Outside combat - free movement
+        UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, TargetLocation);
+        return;
+    }
+
+    // In combat - limited movement
+    if (!SelectedCharacter->bIsMyTurn)
+    {
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red,
+                TEXT("Not your turn!"));
+        }
+        return;
+    }
+
+    bool bSuccess = SelectedCharacter->MoveToLocation(TargetLocation);
+    
+    if (bSuccess)
+    {
+        bIsWaitingForMovement = true;
     }
 }
 
@@ -224,30 +262,39 @@ void ACombatPlayerController::ToggleCombatMode()
 
 void ACombatPlayerController::HandleCombatClick()
 {
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Cyan,
+            TEXT("HandleCombatClick called"));
+    }
+
     ACombatCharacter* ClickedCharacter = GetCharacterUnderCursor();
 
     if (ClickedCharacter)
     {
-        // Check if it's a friendly or enemy character
-        if (ClickedCharacter->IsPlayerControlled())
+        if (GEngine)
         {
-            // Select friendly character
+            GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Green,
+                FString::Printf(TEXT("Clicked character: %s"), *ClickedCharacter->GetName()));
+        }
+
+        // Check if friendly or enemy
+        if (ClickedCharacter->IsPlayerControlledCharacter())
+        {
             HandleCharacterSelection(ClickedCharacter);
         }
         else
         {
-            // Attack enemy character (if we have someone selected)
             HandleEnemyClick(ClickedCharacter);
         }
     }
     else
     {
-        // Clicked on ground - could be for movement
-        // Will implement with grid system later
-        if (GEngine && bIsInCombatMode)
+        // Clicked on ground
+        FVector ClickLocation;
+        if (GetWorldLocationUnderCursor(ClickLocation))
         {
-            GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Cyan,
-                TEXT("Ground click - movement will be implemented with grid system"));
+            HandleGroundClick(ClickLocation);
         }
     }
 }
@@ -278,7 +325,6 @@ bool ACombatPlayerController::GetWorldLocationUnderCursor(FVector& OutLocation) 
     return bHit;
 }
 
-
 void ACombatPlayerController::HandleCharacterSelection(ACombatCharacter* CombatChar)  
 {
     if (!CombatChar) 
@@ -286,26 +332,13 @@ void ACombatPlayerController::HandleCharacterSelection(ACombatCharacter* CombatC
         return;
     }
 
-    // In combat mode, only select if it's our turn or if character is player controlled
-    if (bIsInCombatMode)
+    // Always allow selection of player characters
+    SelectCharacter(CombatChar);
+    
+    // Auto-start turn for debugging (remove later when CombatManager handles it)
+    if (bIsInCombatMode && !CombatChar->bIsMyTurn)
     {
-        if (CombatChar->bIsMyTurn || CombatChar->IsPlayerControlledCharacter())  
-        {
-            SelectCharacter(CombatChar); 
-        }
-        else
-        {
-            if (GEngine)
-            {
-                GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow,
-                    TEXT("Not this character's turn!"));
-            }
-        }
-    }
-    else
-    {
-        // In exploration mode, freely select any player character
-        SelectCharacter(CombatChar); 
+        CombatChar->StartTurn();
     }
 }
 
@@ -316,7 +349,6 @@ void ACombatPlayerController::HandleEnemyClick(ACombatCharacter* Enemy)
         return;
     }
 
-    // Only attack in combat mode
     if (bIsInCombatMode)
     {
         if (SelectedCharacter)
@@ -328,17 +360,46 @@ void ACombatPlayerController::HandleEnemyClick(ACombatCharacter* Enemy)
             if (GEngine)
             {
                 GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow,
-                    TEXT("Select a character first!"));
+                    TEXT("Select your character first!"));
             }
         }
     }
     else
     {
-        // In exploration mode, clicking enemy could start combat
         if (GEngine)
         {
             GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan,
-                TEXT("Enemy detected - press Tab to enter combat mode"));
+                TEXT("Press Tab to enter combat mode"));
         }
+    }
+}
+
+void ACombatPlayerController::HandleGroundClick(const FVector& Location)
+{
+    if (bIsInCombatMode && SelectedCharacter)
+    {
+        // In combat - try to move
+        RequestMovement(Location);
+    }
+    else if (!bIsInCombatMode)
+    {
+        // Outside combat - free movement
+        APawn* ControlledPawn = GetPawn();
+        if (ControlledPawn)
+        {
+            UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, Location);
+        }
+    }
+}
+
+void ACombatPlayerController::OnCharacterMovementComplete(ACombatCharacter* CombatChar)
+{
+    bIsWaitingForMovement = false;
+    
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,
+            FString::Printf(TEXT("%s movement complete | Remaining: %.0f"), 
+                *CombatChar->GetName(), CombatChar->RemainingMovementDistance));
     }
 }

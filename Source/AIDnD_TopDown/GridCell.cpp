@@ -86,28 +86,28 @@ void AGridCell::UpdateCellVisual()
     // Update material color based on cell state
     if (DynamicMaterial)
     {
-        FLinearColor Color;
+        FLinearColor Color = FLinearColor(0.2f, 0.2f, 0.2f, 0.5f);  // ← ИНИЦИАЛИЗИРУЕМ!
         
         switch (CellState)
         {
-            case ECellState::Normal:
-                Color = FLinearColor(0.2f, 0.2f, 0.2f, 0.5f);
-                break;
-            case ECellState::Highlighted:
-                Color = FLinearColor::Yellow;
-                break;
-            case ECellState::Walkable:
-                Color = FLinearColor::Green;
-                break;
-            case ECellState::Attackable:
-                Color = FLinearColor::Red;
-                break;
-            case ECellState::Occupied:
-                Color = FLinearColor(0.5f, 0.5f, 0.5f, 0.8f);
-                break;
-            case ECellState::Blocked:
-                Color = FLinearColor::Black;
-                break;
+        case ECellState::Normal:
+            Color = FLinearColor(0.2f, 0.2f, 0.2f, 0.5f);
+            break;
+        case ECellState::Highlighted:
+            Color = FLinearColor::Yellow;
+            break;
+        case ECellState::Walkable:
+            Color = FLinearColor::Green;
+            break;
+        case ECellState::Attackable:
+            Color = FLinearColor::Red;
+            break;
+        case ECellState::Occupied:
+            Color = FLinearColor(0.5f, 0.5f, 0.5f, 0.8f);
+            break;
+        case ECellState::Blocked:
+            Color = FLinearColor::Black;
+            break;
         }
         
         DynamicMaterial->SetVectorParameterValue(FName("Color"), Color);

@@ -22,19 +22,19 @@ public:
     // COMBAT SYSTEM
     // ============================================
     
-    // Current selected character
     UPROPERTY(BlueprintReadWrite, Category = "Combat")
     class ACombatCharacter* SelectedCharacter;
 
-    // Combat state
     UPROPERTY(BlueprintReadWrite, Category = "Combat")
     bool bIsInCombatMode = false;
 
+    UPROPERTY(BlueprintReadWrite, Category = "Combat")
+    bool bIsWaitingForMovement = false;
+
     // ============================================
-    // ENHANCED INPUT - Input Actions (set in Blueprint)
+    // ENHANCED INPUT
     // ============================================
     
-    // These can be set in your BP_PlayerController
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input|Combat")
     UInputAction* IA_CombatSelect;
 
@@ -48,7 +48,7 @@ public:
     UInputAction* IA_ToggleCombat;
 
     // ============================================
-    // COMBAT FUNCTIONS - Callable from Blueprint
+    // COMBAT FUNCTIONS
     // ============================================
 
     UFUNCTION(BlueprintCallable, Category = "Combat")
@@ -64,6 +64,9 @@ public:
     void RequestAttack(ACombatCharacter* Target);
 
     UFUNCTION(BlueprintCallable, Category = "Combat")
+    void RequestMovement(const FVector& TargetLocation);
+
+    UFUNCTION(BlueprintCallable, Category = "Combat")
     void RequestEndTurn();
 
     UFUNCTION(BlueprintCallable, Category = "Combat")
@@ -73,15 +76,12 @@ public:
     // HELPER FUNCTIONS
     // ============================================
 
-    // Click handling - can be called from Blueprint
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void HandleCombatClick();
 
-    // Get character under cursor
     UFUNCTION(BlueprintCallable, Category = "Combat")
     ACombatCharacter* GetCharacterUnderCursor() const;
 
-    // Get world location under cursor
     UFUNCTION(BlueprintCallable, Category = "Combat")
     bool GetWorldLocationUnderCursor(FVector& OutLocation) const;
 
@@ -90,13 +90,15 @@ protected:
     virtual void SetupInputComponent() override;
 
 private:
-    // Input callbacks - these bind to Enhanced Input Actions
     void OnCombatSelectTriggered(const FInputActionValue& Value);
     void OnEndTurnTriggered(const FInputActionValue& Value);
     void OnAttackTriggered(const FInputActionValue& Value);
     void OnToggleCombatTriggered(const FInputActionValue& Value);
 
-    // Internal helpers
     void HandleCharacterSelection(ACombatCharacter* CombatChar);
     void HandleEnemyClick(ACombatCharacter* Enemy);
+    void HandleGroundClick(const FVector& Location);
+    
+    UFUNCTION()
+    void OnCharacterMovementComplete(ACombatCharacter* CombatChar);
 };

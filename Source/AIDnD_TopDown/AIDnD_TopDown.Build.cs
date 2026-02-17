@@ -14,6 +14,8 @@ public class AIDnD_TopDown : ModuleRules
 			"Engine", 
 			"InputCore",
 			"EnhancedInput",
+			"NavigationSystem",
+			"AIModule",
 			"UMG",
 			"Slate",
 			"SlateCore"
