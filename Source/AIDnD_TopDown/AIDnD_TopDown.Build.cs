@@ -18,7 +18,8 @@ public class AIDnD_TopDown : ModuleRules
 			"HTTP",           // ← для будущего ChatGPT AI
 			"Json",           // ← для сериализации FAIBattleContext
 			"JsonUtilities",
-			"NavigationSystem" // ← для AMovementGridManager
+			"NavigationSystem", // ← для AMovementGridManager
+			"AIModule"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

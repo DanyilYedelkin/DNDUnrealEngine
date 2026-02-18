@@ -2,6 +2,7 @@
 #include "Combat/TurnManager.h"
 #include "Combat/DiceRoller.h"
 #include "Combat/CombatStatsComponent.h"
+#include "Combat/CombatLogger.h"
 #include "Combat/CombatLog.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -26,7 +27,6 @@ ATurnManager* ATurnManager::GetTurnManager(const UObject* WorldContextObject)
     UWorld* World = WorldContextObject->GetWorld();
     if (!World) return nullptr;
 
-    // Find first ATurnManager on the level
     AActor* Found = UGameplayStatics::GetActorOfClass(World, ATurnManager::StaticClass());
     return Cast<ATurnManager>(Found);
 }
@@ -49,7 +49,20 @@ void ATurnManager::StartCombat(
     CurrentRound = 0;
 
     UE_LOG(LogCombat, Log,
-        TEXT("TurnManager: Combat started with %d combatants"), Combatants.Num());
+        TEXT("TurnManager: Combat started with %d combatants"),
+        Combatants.Num());
+
+    // Log combat start
+    if (UCombatLogger* Logger = UCombatLogger::GetCombatLogger(this))
+    {
+        TArray<FText> Names;
+        for (const TScriptInterface<ICombatant>& C : Combatants)
+        {
+            if (C)
+                Names.Add(ICombatant::Execute_GetCombatantName(C.GetObject()));
+        }
+        Logger->LogCombatStart(Names);
+    }
 
     SetCombatState(ECombatState::RollingInit);
     RollInitiativeForAll();
@@ -65,19 +78,23 @@ void ATurnManager::RegisterCombatant(TScriptInterface<ICombatant> Combatant)
 
     Combatants.AddUnique(Combatant);
 
-    // Roll initiative and insert into order
     UCombatStatsComponent* Stats =
         ICombatant::Execute_GetCombatStats(Combatant.GetObject());
 
     FCombatantInitiative Entry;
-    Entry.Combatant            = Combatant;
-    Entry.CombatantName        = ICombatant::Execute_GetCombatantName(Combatant.GetObject());
-    Entry.bIsPlayerControlled  = ICombatant::Execute_IsPlayerControlled(Combatant.GetObject());
-    Entry.DexModifier          = Stats ? Stats->GetAbilityModifier(EAbilityType::Dexterity) : 0;
+    Entry.Combatant           = Combatant;
+    Entry.CombatantName       = ICombatant::Execute_GetCombatantName(Combatant.GetObject());
+    Entry.bIsPlayerControlled = ICombatant::Execute_IsPlayerControlled(Combatant.GetObject());
+    Entry.DexModifier         = Stats
+        ? Stats->GetAbilityModifier(EAbilityType::Dexterity) : 0;
 
     FDiceResult Roll = UDiceRoller::RollInitiativeFull(Entry.DexModifier);
     Entry.InitiativeValue = Roll.Total;
     Entry.NaturalRoll     = Roll.NaturalRoll;
+
+    // Log initiative roll
+    if (UCombatLogger* Logger = UCombatLogger::GetCombatLogger(this))
+        Logger->LogInitiative(Entry.CombatantName, Roll, CurrentRound);
 
     // Insert sorted (descending)
     int32 InsertIdx = InitiativeOrder.Num();
@@ -110,11 +127,10 @@ void ATurnManager::UnregisterCombatant(TScriptInterface<ICombatant> Combatant)
 
     if (RemovedIdx != INDEX_NONE)
     {
-        // If removing the current turn, we need to not skip next combatant
         if (RemovedIdx < CurrentTurnIndex)
             CurrentTurnIndex--;
         else if (RemovedIdx == CurrentTurnIndex)
-            CurrentTurnIndex--;  // EndCurrentTurn will ++
+            CurrentTurnIndex--;
 
         InitiativeOrder.RemoveAt(RemovedIdx);
     }
@@ -145,6 +161,10 @@ void ATurnManager::RollInitiativeForAll()
         InitiativeOrder.Add(Entry);
         OnInitiativeRolled.Broadcast(Entry);
 
+        // Log each initiative roll
+        if (UCombatLogger* Logger = UCombatLogger::GetCombatLogger(this))
+            Logger->LogInitiative(Entry.CombatantName, Roll, CurrentRound);
+
         UE_LOG(LogCombat, Log,
             TEXT("  Initiative: %s rolled d20(%d) + DEX(%d) = %d"),
             *Entry.CombatantName.ToString(),
@@ -153,14 +173,12 @@ void ATurnManager::RollInitiativeForAll()
             Entry.InitiativeValue);
     }
 
-    // Sort descending by initiative value
+    // Sort descending
     InitiativeOrder.Sort([this](const FCombatantInitiative& A,
                                 const FCombatantInitiative& B)
     {
         if (A.InitiativeValue != B.InitiativeValue)
             return A.InitiativeValue > B.InitiativeValue;
-
-        // Tiebreak
         return ResolveTiebreak(A, B);
     });
 
@@ -179,12 +197,9 @@ void ATurnManager::EndCurrentTurn()
     if (!IsCombatActive()) return;
     if (InitiativeOrder.IsEmpty()) return;
 
-    // Notify current combatant their turn is ending
     const FCombatantInitiative& Current = InitiativeOrder[CurrentTurnIndex];
     if (Current.Combatant)
-    {
         ICombatant::Execute_OnTurnEnd(Current.Combatant.GetObject());
-    }
 
     OnTurnEnded.Broadcast(Current);
 
@@ -203,9 +218,12 @@ void ATurnManager::EndCombat(bool bPlayerVictory)
         TEXT("TurnManager: Combat ended — %s"),
         bPlayerVictory ? TEXT("Player Victory") : TEXT("Player Defeat"));
 
+    // Log combat end
+    if (UCombatLogger* Logger = UCombatLogger::GetCombatLogger(this))
+        Logger->LogCombatEnd(bPlayerVictory);
+
     OnCombatEnded.Broadcast();
 
-    // Reset state
     CurrentRound     = 0;
     CurrentTurnIndex = 0;
     InitiativeOrder.Empty();
@@ -277,6 +295,10 @@ void ATurnManager::BeginRound()
     UE_LOG(LogCombat, Log,
         TEXT("TurnManager: === Round %d begins ==="), CurrentRound);
 
+    // Log round start
+    if (UCombatLogger* Logger = UCombatLogger::GetCombatLogger(this))
+        Logger->LogRoundStart(CurrentRound);
+
     OnRoundStarted.Broadcast(CurrentRound);
 
     if (!InitiativeOrder.IsEmpty())
@@ -311,10 +333,13 @@ void ATurnManager::BeginTurn(int32 TurnIndex)
         return;
     }
 
-    // Set combat state based on who's acting
     SetCombatState(Entry.bIsPlayerControlled
         ? ECombatState::PlayerTurn
         : ECombatState::EnemyTurn);
+
+    // Log turn start
+    if (UCombatLogger* Logger = UCombatLogger::GetCombatLogger(this))
+        Logger->LogTurnStart(Entry.CombatantName, CurrentRound);
 
     ICombatant::Execute_OnTurnStart(Entry.Combatant.GetObject());
     OnTurnStarted.Broadcast(Entry);
@@ -329,31 +354,23 @@ void ATurnManager::AdvanceToNextCombatant()
     const int32 NextIndex = CurrentTurnIndex + 1;
 
     if (NextIndex >= InitiativeOrder.Num())
-    {
-        // All combatants have acted — end round
         EndRound();
-    }
     else
-    {
         BeginTurn(NextIndex);
-    }
 }
 
 bool ATurnManager::ResolveTiebreak(const FCombatantInitiative& A,
                                     const FCombatantInitiative& B) const
 {
-    // Player always wins tiebreak if configured
     if (bPlayerWinsTiebreak)
     {
         if (A.bIsPlayerControlled && !B.bIsPlayerControlled) return true;
         if (!A.bIsPlayerControlled && B.bIsPlayerControlled) return false;
     }
 
-    // Otherwise: higher DEX modifier wins
     if (A.DexModifier != B.DexModifier)
         return A.DexModifier > B.DexModifier;
 
-    // Final tiebreak: random coin flip
     return FMath::RandBool();
 }
 

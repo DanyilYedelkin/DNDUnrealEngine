@@ -319,3 +319,28 @@ struct AIDND_TOPDOWN_API FCombatLogEntry
     UPROPERTY(BlueprintReadOnly, Category = "Combat Log")
     int32 Value = 0;
 };
+
+/** Result returned after executing any combat action */
+USTRUCT(BlueprintType)
+struct AIDND_TOPDOWN_API FActionResult
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    bool bSuccess = false;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    FText ResultMessage;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    FAttackResult AttackResult;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    int32 DamageDealt = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    int32 HealingDone = 0;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    EDamageType DamageType = EDamageType::Bludgeoning;
+};
