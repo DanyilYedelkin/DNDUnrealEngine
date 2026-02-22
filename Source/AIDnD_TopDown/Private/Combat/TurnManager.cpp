@@ -35,8 +35,7 @@ ATurnManager* ATurnManager::GetTurnManager(const UObject* WorldContextObject)
 //  COMBAT LIFECYCLE
 // ============================================================
 
-void ATurnManager::StartCombat(
-    const TArray<TScriptInterface<ICombatant>>& InCombatants)
+void ATurnManager::StartCombat(const TArray<AActor*>& InActors)
 {
     if (IsCombatActive())
     {
@@ -45,8 +44,20 @@ void ATurnManager::StartCombat(
         return;
     }
 
-    Combatants = InCombatants;
-    CurrentRound = 0;
+    // Конвертируем AActor* в TScriptInterface<ICombatant>
+    Combatants.Empty();
+    for (AActor* Actor : InActors)
+    {
+        if (!Actor) continue;
+        if (Actor->Implements<UCombatant>())
+        {
+            TScriptInterface<ICombatant> CombatantInterface;
+            CombatantInterface.SetObject(Actor);
+            CombatantInterface.SetInterface(
+                Cast<ICombatant>(Actor));
+            Combatants.Add(CombatantInterface);
+        }
+    }
 
     UE_LOG(LogCombat, Log,
         TEXT("TurnManager: Combat started with %d combatants"),

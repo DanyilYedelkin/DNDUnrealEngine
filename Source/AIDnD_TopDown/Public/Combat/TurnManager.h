@@ -168,7 +168,7 @@ public:
      * Triggers initiative rolls and begins round 1.
      */
     UFUNCTION(BlueprintCallable, Category = "Combat|TurnManager")
-    void StartCombat(const TArray<TScriptInterface<ICombatant>>& Combatants);
+    void StartCombat(const TArray<AActor*>& InActors);
 
     /** Register a new combatant mid-combat (e.g. summoned creature) */
     UFUNCTION(BlueprintCallable, Category = "Combat|TurnManager")

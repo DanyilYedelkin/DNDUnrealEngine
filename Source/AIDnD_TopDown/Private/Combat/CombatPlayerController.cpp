@@ -4,7 +4,8 @@
 #include "Combat/CombatStatsComponent.h"
 #include "Combat/TurnManager.h"
 #include "Combat/CombatLog.h"
-#include "Combat/Actions/CombatAction.h" 
+#include "Combat/Actions/CombatAction.h"
+#include "Combat/Actions/MeleeAttackAction.h"
 
 ACombatPlayerController::ACombatPlayerController()
 {
@@ -23,6 +24,33 @@ void ACombatPlayerController::BeginPlay()
         TM->OnCombatEnded.AddDynamic(this,
             &ACombatPlayerController::HandleCombatEnded);
     }
+}
+
+FActionResult ACombatPlayerController::AttackTarget(ACombatCharacter* Target)
+{
+    if (!bInCombatMode)
+        return FActionResult{false, FText::FromString("Not in combat")};
+
+    ACombatCharacter* Source = GetCurrentTurnCharacter();
+    if (!Source)
+        return FActionResult{false, FText::FromString("No active character")};
+
+    if (!IsMyTurn())
+        return FActionResult{false, FText::FromString("Not your turn")};
+
+    UMeleeAttackAction* Attack = NewObject<UMeleeAttackAction>(this);
+    Attack->bProficient = true;
+
+    FText Reason;
+    if (!Attack->CanExecute(Source, Reason))
+        return FActionResult{false, Reason};
+
+    FActionResult Result = Attack->Execute(
+        Source,
+        Target->GetActorLocation(),
+        Target);
+
+    return Result;
 }
 
 // ============================================================

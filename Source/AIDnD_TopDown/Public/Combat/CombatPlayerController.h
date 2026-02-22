@@ -57,6 +57,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Combat")
     void SelectCharacter(ACombatCharacter* InCharacter);
 
+    /** Атаковать цель ближним боем */
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    FActionResult AttackTarget(ACombatCharacter* Target);
+
     /**
      * Queue an action to be executed on ConfirmAction.
      */
