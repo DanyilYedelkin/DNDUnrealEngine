@@ -14,12 +14,18 @@ public class AIDnD_TopDown : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"InputCore",
-			"GameplayTags",   // ← для будущих GameplayTags на способностях
-			"HTTP",           // ← для будущего ChatGPT AI
-			"Json",           // ← для сериализации FAIBattleContext
+			"GameplayTags",   
+			"HTTP",          
+			"Json",         
 			"JsonUtilities",
-			"NavigationSystem", // ← для AMovementGridManager
-			"AIModule"
+			"NavigationSystem", 
+			"AIModule",
+			"HTTP",         
+			"Json",    
+			"JsonUtilities",  
+			"UMG",     
+			"Slate",
+			"SlateCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
