@@ -72,7 +72,7 @@ public:
 
     /** Модель OpenAI */
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "GameMaster|Config")
-    FString GMModel = TEXT("gpt-4o");
+    FString GMModel = TEXT("gpt-4o-mini");
 
     /** Максимальный кол-во токенов на генерацию уровня */
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "GameMaster|Config",

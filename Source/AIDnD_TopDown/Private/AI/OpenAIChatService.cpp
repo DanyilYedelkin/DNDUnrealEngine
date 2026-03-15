@@ -40,7 +40,7 @@ TSharedPtr<FJsonObject> UOpenAIChatService::BuildRequestBody(
 {
     auto Root = MakeShared<FJsonObject>();
     Root->SetStringField(TEXT("model"), ModelName);
-    Root->SetNumberField(TEXT("max_tokens"), 500); // TODO: настроить
+    Root->SetNumberField(TEXT("max_tokens"), MaxTokens);
     Root->SetNumberField(TEXT("temperature"), 0.8);
 
     TArray<TSharedPtr<FJsonValue>> MessagesArray;
@@ -66,16 +66,18 @@ void UOpenAIChatService::SendChatRequest(const TArray<FChatMessage>& Messages,
                                           FOnChatSuccess OnSuccess,
                                           FOnChatError   OnError)
 {
-    // Cooldown check
     double Now = FPlatformTime::Seconds();
+
+    // ЗАМЕНИ ВСЕ ПРОВЕРКИ В НАЧАЛЕ НА ЭТО:
     if (bRequestInFlight)
     {
-        OnError.ExecuteIfBound(TEXT("Request already in flight. Please wait."));
-        return;
+        UE_LOG(LogTemp, Warning, TEXT("Forcing reset of stuck request"));
+        bRequestInFlight = false; // принудительно сбрасываем
     }
+
     if ((Now - LastRequestTime) < CooldownSeconds)
     {
-        OnError.ExecuteIfBound(TEXT("Cooldown active. Please wait."));
+        OnError.ExecuteIfBound(TEXT("Cooldown active."));
         return;
     }
     if (APIKey.IsEmpty())
@@ -94,20 +96,33 @@ void UOpenAIChatService::SendChatRequest(const TArray<FChatMessage>& Messages,
     FJsonSerializer::Serialize(RequestBody.ToSharedRef(), Writer);
 
     // HTTP запрос
+    if (ActiveRequest.IsValid())
+    {
+        ActiveRequest->CancelRequest();
+        ActiveRequest.Reset();
+    }
+
     TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest =
         FHttpModule::Get().CreateRequest();
+    ActiveRequest = HttpRequest;
 
     HttpRequest->SetURL(EndpointURL);
     HttpRequest->SetVerb(TEXT("POST"));
     HttpRequest->SetHeader(TEXT("Content-Type"),  TEXT("application/json"));
     HttpRequest->SetHeader(TEXT("Authorization"), TEXT("Bearer ") + APIKey);
     HttpRequest->SetContentAsString(BodyString);
-    HttpRequest->SetTimeout(30.0f); // 30 сек таймаут
+    HttpRequest->SetTimeout(90.0f);
 
     HttpRequest->OnProcessRequestComplete().BindUObject(
         this, &UOpenAIChatService::OnResponseReceived,
         OnSuccess, OnError);
 
+    // test...
+    UE_LOG(LogTemp, Warning, TEXT("=== SENDING HTTP REQUEST TO: %s ==="), *EndpointURL);
+    UE_LOG(LogTemp, Warning, TEXT("=== API KEY LENGTH: %d ==="), APIKey.Len());
+    UE_LOG(LogTemp, Warning, TEXT("=== BODY LENGTH: %d chars ==="), BodyString.Len());
+    HttpRequest->ProcessRequest();
+    
     HttpRequest->ProcessRequest();
 }
 
@@ -118,6 +133,7 @@ void UOpenAIChatService::OnResponseReceived(FHttpRequestPtr Request,
                                              FOnChatError   OnError)
 {
     bRequestInFlight = false;
+    ActiveRequest.Reset();
 
     if (!bSuccess || !Response.IsValid())
     {

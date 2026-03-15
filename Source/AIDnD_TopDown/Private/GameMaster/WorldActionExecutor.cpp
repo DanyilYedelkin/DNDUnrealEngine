@@ -181,7 +181,7 @@ void UWorldActionExecutor::ExecuteSingleAction(const FGMAction& Action,
 }
 
 // ============================================================
-//  Спавн из каталога (используется для Environment, NPC, Enemy)
+//  Spawn from the catalogue (used for Environment, NPC, Enemy)
 // ============================================================
 
 AActor* UWorldActionExecutor::SpawnFromCatalog(const FString& AssetID,
@@ -216,8 +216,7 @@ AActor* UWorldActionExecutor::SpawnFromCatalog(const FString& AssetID,
             TEXT("Asset '%s' has null class"), *AssetID));
         return nullptr;
     }
-
-    // Синхронная загрузка — приемлемо при старте уровня
+    
     UClass* ActorClass = Entry.ActorClass.LoadSynchronous();
     if (!ActorClass) return nullptr;
 
@@ -225,14 +224,20 @@ AActor* UWorldActionExecutor::SpawnFromCatalog(const FString& AssetID,
     SpawnParams.SpawnCollisionHandlingOverride =
         ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    // Transform включает Scale — именно так GM масштабирует блоки стен
     AActor* Spawned = World->SpawnActor<AActor>(
         ActorClass,
         Transform.ToUETransform(),
         SpawnParams);
-
+    
     if (Spawned)
     {
+        Spawned->SetActorScale3D(Transform.Scale);
+
+        if (USceneComponent* Root = Spawned->GetRootComponent())
+        {
+            Root->SetWorldScale3D(Transform.Scale);
+        }
+
         if (!Entry.Tag.IsNone())
             Spawned->Tags.AddUnique(Entry.Tag);
         Spawned->Tags.AddUnique(TEXT("GM_Spawned"));
@@ -249,6 +254,16 @@ AActor* UWorldActionExecutor::SpawnFromCatalog(const FString& AssetID,
 
 void UWorldActionExecutor::ExecuteSpawnActor(const FGMAction& Action, UWorld* World)
 {
+    UE_LOG(LogTemp, Warning, 
+        TEXT("SpawnActor: %s | loc(%0.f,%0.f,%0.f) | scale(%0.f,%0.f,%0.f)"),
+        *Action.AssetID,
+        Action.SpawnTransform.Location.X,
+        Action.SpawnTransform.Location.Y, 
+        Action.SpawnTransform.Location.Z,
+        Action.SpawnTransform.Scale.X,
+        Action.SpawnTransform.Scale.Y,
+        Action.SpawnTransform.Scale.Z);
+    
     if (!Settings) { ReportError(TEXT("SpawnActor"), TEXT("Settings not assigned")); return; }
     if (SpawnedEnvironment >= Settings->MaxEnvironmentActors)
     {

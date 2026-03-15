@@ -21,12 +21,14 @@ public:
 
 	// Cooldown в секундах между запросами на один NPC (анти-спам)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="OpenAI")
+	int32 MaxTokens = 1000;
 	float CooldownSeconds = 2.0f;
 
 private:
 	FString APIKey;
-	FString ModelName;      // TODO: задать модель, например "gpt-4o-mini"
+	FString ModelName;
 	FString EndpointURL;    // TODO: "https://api.openai.com/v1/chat/completions"
+	TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> ActiveRequest;
 
 	double LastRequestTime = 0.0;
 	bool bRequestInFlight = false;

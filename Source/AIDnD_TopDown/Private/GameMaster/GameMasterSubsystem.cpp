@@ -1,10 +1,9 @@
-// GameMasterSubsystem.cpp
 #include "GameMaster/GameMasterSubsystem.h"
 #include "GameMaster/WorldActionExecutor.h"
 #include "GameMaster/WorldCatalogDataAsset.h"
 #include "GameMaster/LevelGenerationSettingsDataAsset.h"
 #include "GameMaster/SaveGame_CampaignMemory.h"
-#include "AI/OpenAIChatService.h"    // существующий HTTP сервис
+#include "AI/OpenAIChatService.h"
 #include "AI/ChatTypes.h"
 
 #include "Dom/JsonObject.h"
@@ -22,14 +21,11 @@ DEFINE_LOG_CATEGORY_STATIC(LogGameMaster, Log, All);
 void UGameMasterSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
-
-    // Создаём HTTP сервис (переиспользуем существующий UOpenAIChatService)
+    
     OpenAIService = NewObject<UOpenAIChatService>(this);
     OpenAIService->Initialize();
-    // GM может ждать дольше — повышаем cooldown
     OpenAIService->CooldownSeconds = RequestCooldown;
-
-    // Создаём исполнитель действий
+    
     ActionExecutor = NewObject<UWorldActionExecutor>(this);
 
     EnsureSaveDataExists();
@@ -44,7 +40,7 @@ void UGameMasterSubsystem::Deinitialize()
 }
 
 // ============================================================
-//  ГЕНЕРАЦИЯ УРОВНЯ
+//  Level generation
 // ============================================================
 
 void UGameMasterSubsystem::GenerateLevel(UWorld* World)
@@ -69,20 +65,17 @@ void UGameMasterSubsystem::GenerateLevel(UWorld* World)
         OnGameMasterError.Broadcast(TEXT("WorldCatalog DataAsset not assigned!"));
         return;
     }
-
-    // Настраиваем executor
+    
     ActionExecutor->Catalog  = WorldCatalog;
     ActionExecutor->Settings = LevelSettings;
     ActionExecutor->ResetCounters();
 
-    // Строим сообщения для OpenAI
     TArray<FChatMessage> Messages;
     Messages.Add(FChatMessage(EChatRole::System, BuildGMSystemPrompt()));
     Messages.Add(FChatMessage(EChatRole::User,   BuildLevelGenerationPrompt()));
 
     UE_LOG(LogGameMaster, Log, TEXT("Sending level generation request to GM..."));
-
-    // Сохраняем World для использования в callback (weak ptr через UWorld*)
+    
     TWeakObjectPtr<UWorld> WeakWorld = World;
 
     SendGMRequest(
@@ -102,25 +95,21 @@ void UGameMasterSubsystem::GenerateLevel(UWorld* World)
                     TEXT("Level generation parse failed: %s"), *Result.ErrorMessage);
                 OnGameMasterError.Broadcast(Result.ErrorMessage);
 
-                // Fallback: базовый нарратив без спавна
+                // Fallback: default for a spawn
                 Result.bSuccess = true;
                 Result.OpeningNarration = TEXT("You find yourself in a mysterious place. Your adventure begins...");
             }
 
-            // Применяем к кампании
             ApplyLevelResultToCampaign(Result);
-
-            // Выполняем actions в мире
+            
             TArray<FGMAction> ValidActions = ValidateActions(Result.Actions);
             ActionExecutor->ExecuteActions(ValidActions, W);
 
-            // Уведомляем о нарративе
             if (!Result.OpeningNarration.IsEmpty())
             {
                 OnNarrationReady.Broadcast(Result.OpeningNarration);
             }
 
-            // Регистрируем квесты
             for (const FGMQuest& Quest : Result.InitialQuests)
             {
                 AddQuestToCampaign(Quest);
@@ -164,8 +153,7 @@ void UGameMasterSubsystem::SendCampaignEvent(const FGMCampaignEvent& Event,
         UE_LOG(LogGameMaster, Verbose, TEXT("SendCampaignEvent: Skipped — request in flight"));
         return;
     }
-
-    // Логируем событие в памяти
+    
     EnsureSaveDataExists();
     SaveData->CampaignState.RecentEventLog.Add(Event.Description);
     SaveData->TrimHistory();
@@ -188,7 +176,6 @@ void UGameMasterSubsystem::SendCampaignEvent(const FGMCampaignEvent& Event,
 
             if (!Response.bSuccess)
             {
-                // Soft fallback — хотя бы нарратив
                 Response.bSuccess = true;
                 Response.NarrationText = TEXT("The world reacts to your actions...");
             }
@@ -200,14 +187,12 @@ void UGameMasterSubsystem::SendCampaignEvent(const FGMCampaignEvent& Event,
                 OnNarrationReady.Broadcast(Response.NarrationText);
             }
 
-            // Выполняем дополнительные actions если есть
             if (W && Response.Actions.Num() > 0)
             {
                 TArray<FGMAction> Valid = ValidateActions(Response.Actions);
                 ActionExecutor->ExecuteActions(Valid, W);
             }
 
-            // Обновляем квесты
             for (const FGMAction& Action : Response.Actions)
             {
                 if (Action.ActionType == EGMActionType::SetQuest)
@@ -224,7 +209,6 @@ void UGameMasterSubsystem::SendCampaignEvent(const FGMCampaignEvent& Event,
         {
             UE_LOG(LogGameMaster, Warning,
                 TEXT("Campaign event error: %s"), *Error);
-            // Не показываем ошибку игроку — просто тихий fallback
             FGMNarrativeResponse Fallback;
             Fallback.bSuccess = true;
             Fallback.NarrationText = TEXT("...");
@@ -354,12 +338,10 @@ FString UGameMasterSubsystem::BuildGMSystemPrompt_Implementation() const
 
     Prompt += TEXT("CRITICAL: You MUST respond ONLY with valid JSON. No markdown, no explanation outside JSON.\n\n");
 
-    // ---- Режим карты ----
     bool bIsDungeon = LevelSettings && LevelSettings->IsDungeon();
 
     if (bIsDungeon)
     {
-        // Данжен: GM расставляет блоки одной стены с разным масштабом и поворотом
         Prompt += TEXT("MAP TYPE: DUNGEON (indoor)\n");
         Prompt += TEXT("You create dungeon rooms and corridors by placing WALL BLOCKS.\n");
         Prompt += TEXT("There is ONE wall prefab asset. You control its shape via 'scale' in the transform:\n");
@@ -372,7 +354,6 @@ FString UGameMasterSubsystem::BuildGMSystemPrompt_Implementation() const
     }
     else
     {
-        // Открытая местность: GM расставляет декоративные prefab'ы
         Prompt += TEXT("MAP TYPE: OPEN WORLD (outdoor)\n");
         Prompt += TEXT("You scatter decorative prefabs across the landscape:\n");
         Prompt += TEXT("  - Trees, rocks, bushes for natural terrain.\n");
@@ -381,8 +362,7 @@ FString UGameMasterSubsystem::BuildGMSystemPrompt_Implementation() const
         Prompt += TEXT("  - Spread objects across the entire map area.\n");
         Prompt += TEXT("  - Leave open areas for combat and movement.\n\n");
     }
-
-    // ---- JSON-схема ответа ----
+    
     Prompt += TEXT("Respond with this exact JSON schema:\n");
     Prompt += TEXT("{\n");
     Prompt += TEXT("  \"level_metadata\": { \"theme\": \"...\", \"seed\": 42 },\n");
@@ -422,8 +402,7 @@ FString UGameMasterSubsystem::BuildGMSystemPrompt_Implementation() const
     Prompt += TEXT("  ],\n");
     Prompt += TEXT("  \"memory_update\": { \"summary\": \"1-2 sentences about this location\", \"facts\": [] }\n");
     Prompt += TEXT("}\n\n");
-
-    // ---- Контекст кампании ----
+    
     if (SaveData)
     {
         FString CampaignContext = SaveData->BuildGMContextString();
@@ -433,7 +412,6 @@ FString UGameMasterSubsystem::BuildGMSystemPrompt_Implementation() const
         }
     }
 
-    // ---- Каталог ----
     Prompt += TEXT("[AVAILABLE ASSET IDs — use ONLY these exact strings]:\n");
     Prompt += GetCatalogSummaryForPrompt();
 
@@ -454,32 +432,78 @@ FString UGameMasterSubsystem::BuildLevelGenerationPrompt_Implementation() const
 
     Prompt += FString::Printf(TEXT("Atmosphere: %s\n"), *LevelSettings->Atmosphere);
 
-    // Границы координат
+    // coordinates limits
     Prompt += FString::Printf(
         TEXT("World bounds (Unreal units): X[%.0f .. %.0f]  Y[%.0f .. %.0f]  Z[0 .. 400]\n"),
         LevelSettings->WorldMin.X, LevelSettings->WorldMax.X,
         LevelSettings->WorldMin.Y, LevelSettings->WorldMax.Y);
 
-    // Лимиты
+    // limits
     Prompt += FString::Printf(
         TEXT("Spawn limits: max %d environment objects, max %d NPCs, max %d enemies.\n"),
         LevelSettings->MaxEnvironmentActors,
         LevelSettings->MaxNPCs,
         LevelSettings->MaxEnemies);
 
-    // Инструкции по типу карты
+    // instructions for a map's type
     if (LevelSettings->IsDungeon())
     {
-        Prompt += TEXT("\n--- DUNGEON LAYOUT INSTRUCTIONS ---\n");
-        Prompt += TEXT("Use SpawnActor with assetId=\"Wall_A\" and SCALE to build the dungeon:\n");
-        Prompt += TEXT("  * Create at least 2-3 connected rooms.\n");
-        Prompt += TEXT("  * Each room: 4 walls forming a rectangle, leave gaps (200-300 units) for passages.\n");
-        Prompt += TEXT("  * Corridor: 2 long parallel walls (scale x=6..10, y=1, z=2) facing each other.\n");
-        Prompt += TEXT("  * Use yaw rotation: 0=wall faces South, 90=wall faces West, 180=North, 270=East.\n");
-        Prompt += TEXT("  * Place player start area near (0,0,0). Spread enemies in different rooms.\n");
-        Prompt += TEXT("  * NPCs should be in safe rooms away from enemies.\n");
-        Prompt += TEXT("  * 1 unit scale = 100 Unreal units. Standard room = 10x10 scale units.\n");
-        Prompt += TEXT("  * Total wall actors: aim for 20-40 pieces.\n\n");
+        Prompt += TEXT("\n--- DUNGEON BUILDING RULES (read carefully) ---\n");
+        Prompt += TEXT("Asset 'Wall_Stone' is a cube: 100x100x100 Unreal Units at scale(1,1,1).\n");
+        Prompt += TEXT("scale(X,Y,Z) means the cube becomes X*100 x Y*100 x Z*100 UU.\n\n");
+
+        Prompt += TEXT("=== FLOOR ===\n");
+        Prompt += TEXT("Always ONE big floor per room. Flat, thin.\n");
+        Prompt += TEXT("scale: X=room_width, Y=room_depth, Z=0.5\n");
+        Prompt += TEXT("location Z = 0 (sits on ground level)\n\n");
+
+        Prompt += TEXT("=== WALLS ===\n");
+        Prompt += TEXT("Walls are THIN and TALL: thickness Y=0.5, height Z=5\n");
+        Prompt += TEXT("North/South walls: scale(room_width, 0.5, 5), run along X axis\n");
+        Prompt += TEXT("East/West walls:   scale(0.5, room_depth, 5), run along Y axis\n");
+        Prompt += TEXT("Wall center Z = 250 (= 5*100/2, sits on top of floor)\n\n");
+
+        Prompt += TEXT("=== WALL PLACEMENT FORMULA ===\n");
+        Prompt += TEXT("If room floor is at (cx, cy) with scale(W, D, 0.5):\n");
+        Prompt += TEXT("  North wall: location(cx,          cy + D*50 + 25, 250), scale(W,   0.5, 5)\n");
+        Prompt += TEXT("  South wall: location(cx,          cy - D*50 - 25, 250), scale(W,   0.5, 5)\n");
+        Prompt += TEXT("  East wall:  location(cx + W*50 + 25, cy,          250), scale(0.5, D,   5)\n");
+        Prompt += TEXT("  West wall:  location(cx - W*50 - 25, cy,          250), scale(0.5, D,   5)\n\n");
+
+        Prompt += TEXT("=== CONCRETE EXAMPLE: 20x20 room at origin ===\n");
+        Prompt += TEXT("Floor: location(0,0,0)       scale(20, 20, 0.5)\n");
+        Prompt += TEXT("North: location(0, 1025, 250) scale(20, 0.5, 5)\n");
+        Prompt += TEXT("South: location(0,-1025, 250) scale(20, 0.5, 5)\n");
+        Prompt += TEXT("East:  location(1025, 0, 250) scale(0.5, 20, 5)\n");
+        Prompt += TEXT("West:  location(-1025,0, 250) scale(0.5, 20, 5)\n\n");
+
+        Prompt += TEXT("=== CORRIDOR connecting two rooms ===\n");
+        Prompt += TEXT("Floor: scale(4, 10, 0.5) between room centers\n");
+        Prompt += TEXT("Left wall:  scale(0.5, 10, 5)\n");
+        Prompt += TEXT("Right wall: scale(0.5, 10, 5)\n");
+        Prompt += TEXT("NO end walls where corridor meets rooms (leave gap for passage)\n\n");
+
+        Prompt += TEXT("=== DOOR GAPS ===\n");
+        Prompt += TEXT("Where corridor connects to room: remove that wall segment.\n");
+        Prompt += TEXT("Replace one full wall with two half-walls leaving 300 UU gap in middle.\n");
+        Prompt += TEXT("Half-wall scale: (W/2 - 1.5, 0.5, 5), placed left and right of gap.\n\n");
+
+        Prompt += TEXT("=== GENERATE THIS LAYOUT ===\n");
+        Prompt += TEXT("Room 1 (start): 20x20, centered at (0, 0)\n");
+        Prompt += TEXT("Corridor:       4x12, going North from Room 1 center\n");
+        Prompt += TEXT("Room 2:         16x16, centered at (0, 2000)\n");
+        Prompt += TEXT("Corridor:       4x10, going East from Room 2\n");
+        Prompt += TEXT("Room 3:         12x12, centered at (1800, 2000)\n\n");
+
+        Prompt += TEXT("PLAYER START RULES:\n");
+        Prompt += TEXT("- Room 1 center (0,0) is the spawn point — NO walls within 300 UU of (0,0,0)\n");
+        Prompt += TEXT("- The very center of Room 1 must be completely open\n");
+        Prompt += TEXT("- Walls of Room 1 start at distance 500+ UU from center\n");
+        Prompt += TEXT("- Place NPCs in Room 2, enemies in Room 3 only\n");
+        Prompt += TEXT("- NEVER place any actor at location closer than 200 UU to (0,0)\n\n");
+        Prompt += TEXT("ALWAYS include floor for every room and corridor.\n");
+        Prompt += TEXT("DO NOT use rotation — use scale X/Y swap instead for orientation.\n");
+        Prompt += TEXT("Total actors: 20-30 (floors + walls).\n\n");
     }
     else
     {
@@ -494,7 +518,7 @@ FString UGameMasterSubsystem::BuildLevelGenerationPrompt_Implementation() const
         Prompt += TEXT("  * Place enemies at the edges or in dangerous-looking areas.\n\n");
     }
 
-    // Квест
+    // quest
     if (!LevelSettings->StartingQuestHint.IsEmpty())
     {
         Prompt += FString::Printf(TEXT("Starting quest theme: %s\n"),
@@ -507,7 +531,7 @@ FString UGameMasterSubsystem::BuildLevelGenerationPrompt_Implementation() const
         Prompt += FString::Printf(TEXT("Use seed %d for layout consistency.\n"), LevelSettings->Seed);
     }
 
-    // Обязательные менеджеры
+    // managers
     if (LevelSettings->RequiredManagerIDs.Num() > 0)
     {
         Prompt += TEXT("You MUST spawn these managers (use SpawnManager): ");
@@ -515,8 +539,7 @@ FString UGameMasterSubsystem::BuildLevelGenerationPrompt_Implementation() const
             Prompt += ID + TEXT(", ");
         Prompt += TEXT("\n");
     }
-
-    // Дополнительные инструкции от дизайнера
+    
     if (!LevelSettings->ExtraGMInstructions.IsEmpty())
     {
         Prompt += TEXT("Extra instructions: ") + LevelSettings->ExtraGMInstructions + TEXT("\n");
@@ -570,7 +593,7 @@ void UGameMasterSubsystem::SendGMRequest(
 
     bRequestInFlight = true;
 
-    // UOpenAIChatService использует делегаты, адаптируем к lambda
+    OpenAIService->MaxTokens = MaxTokens;
     OpenAIService->SendChatRequest(
         Messages,
         FOnChatSuccess::CreateLambda([this, OnSuccess](const FString& Response)
@@ -594,6 +617,8 @@ void UGameMasterSubsystem::SendGMRequest(
 FGMLevelGenerationResult UGameMasterSubsystem::ParseLevelGenerationResponse(
     const FString& JsonString) const
 {
+    UE_LOG(LogTemp, Warning, TEXT("=== GM RAW RESPONSE ===\n%s"), *JsonString);
+    
     FGMLevelGenerationResult Result;
 
     TSharedPtr<FJsonObject> Root;
@@ -766,14 +791,14 @@ FGMAction UGameMasterSubsystem::ParseSingleAction(
         }
     }
 
-    // Quest (для SetQuest)
+    // Quest (for SetQuest)
     if (const TSharedPtr<FJsonObject>* QObj = nullptr;
         Obj->TryGetObjectField(TEXT("quest"), QObj) && QObj)
     {
         Action.Quest = ParseQuest(*QObj);
     }
 
-    // Тип
+    // type
     static const TMap<FString, EGMActionType> TypeMap =
     {
         { TEXT("SpawnActor"),    EGMActionType::SpawnActor },
@@ -826,20 +851,32 @@ FGMQuest UGameMasterSubsystem::ParseQuest(
 FString UGameMasterSubsystem::ExtractJsonFromResponse(
     const FString& RawResponse) const
 {
-    // Убираем markdown-обёртки если модель добавила ```json ... ```
     FString Cleaned = RawResponse.TrimStartAndEnd();
 
     if (Cleaned.StartsWith(TEXT("```")))
     {
-        // Найти первый { и последний }
         int32 Start = Cleaned.Find(TEXT("{"));
         int32 End   = Cleaned.Find(TEXT("}"), ESearchCase::IgnoreCase,
                                     ESearchDir::FromEnd);
         if (Start != INDEX_NONE && End != INDEX_NONE && End > Start)
-        {
-            return Cleaned.Mid(Start, End - Start + 1);
-        }
+            Cleaned = Cleaned.Mid(Start, End - Start + 1);
     }
+    
+    TArray<FString> BadPatterns = {
+        TEXT("\"x:"), TEXT("\"y:"), TEXT("\"z:"),
+        TEXT("\"pitch:"), TEXT("\"yaw:"), TEXT("\"roll:")
+    };
+    TArray<FString> GoodPatterns = {
+        TEXT("\"x\":"), TEXT("\"y\":"), TEXT("\"z\":"),
+        TEXT("\"pitch\":"), TEXT("\"yaw\":"), TEXT("\"roll\":")
+    };
+
+    for (int32 i = 0; i < BadPatterns.Num(); i++)
+    {
+        Cleaned = Cleaned.Replace(*BadPatterns[i], *GoodPatterns[i],
+                                   ESearchCase::CaseSensitive);
+    }
+
     return Cleaned;
 }
 
@@ -851,7 +888,10 @@ TArray<FGMAction> UGameMasterSubsystem::ValidateActions(
     const TArray<FGMAction>& Actions) const
 {
     TArray<FGMAction> Valid;
-    if (!LevelSettings) return Actions; // без настроек — пропускаем
+    if (!LevelSettings)
+    {
+        return Actions;
+    }
 
     int32 Limit = FMath::Min(Actions.Num(), LevelSettings->MaxActionsPerResponse);
 
@@ -859,15 +899,13 @@ TArray<FGMAction> UGameMasterSubsystem::ValidateActions(
     {
         const FGMAction& A = Actions[i];
 
-        // Фильтруем Unknown
         if (A.ActionType == EGMActionType::Unknown)
         {
             UE_LOG(LogGameMaster, Warning,
                 TEXT("Skipping unknown action type: '%s'"), *A.RawType);
             continue;
         }
-
-        // Пустой assetId для spawn-типов — пропускаем
+        
         if (A.AssetID.IsEmpty() &&
             (A.ActionType == EGMActionType::SpawnActor ||
              A.ActionType == EGMActionType::SpawnNPC ||
@@ -924,7 +962,7 @@ void UGameMasterSubsystem::ApplyNarrativeResponseToCampaign(
 void UGameMasterSubsystem::AddQuestToCampaign(const FGMQuest& Quest)
 {
     EnsureSaveDataExists();
-    // Проверяем — нет ли уже такого квеста
+
     for (const FGMQuest& Existing : SaveData->CampaignState.ActiveQuests)
     {
         if (Existing.QuestID == Quest.QuestID) return;
@@ -934,13 +972,65 @@ void UGameMasterSubsystem::AddQuestToCampaign(const FGMQuest& Quest)
 
 FString UGameMasterSubsystem::GetCatalogSummaryForPrompt() const
 {
-    if (!WorldCatalog) return TEXT("(catalog not assigned)\n");
+    if (!WorldCatalog)
+    {
+        return TEXT("(catalog not assigned)\n");
+    }
 
     FString Summary;
-    TArray<FString> IDs = WorldCatalog->GetAllRegisteredIDs();
-    for (const FString& ID : IDs)
+
+    // Environment
+    TArray<FString> EnvIDs;
+    WorldCatalog->EnvironmentActors.GetKeys(EnvIDs);
+    if (EnvIDs.Num() > 0)
     {
-        Summary += TEXT("  - ") + ID + TEXT("\n");
+        Summary += TEXT("  Environment (use for walls/floor/props, type=SpawnActor):\n");
+        for (const FString& ID : EnvIDs)
+        {
+            Summary += TEXT("    - \"") + ID + TEXT("\"\n");
+        }
     }
-    return Summary.IsEmpty() ? TEXT("  (empty catalog)\n") : Summary;
+
+    // NPCs
+    TArray<FString> NPCIDs;
+    WorldCatalog->NPCActors.GetKeys(NPCIDs);
+    if (NPCIDs.Num() > 0)
+    {
+        Summary += TEXT("  NPCs (type=SpawnNPC, include personaPrompt):\n");
+        for (const FString& ID : NPCIDs)
+        {
+            Summary += TEXT("    - \"") + ID + TEXT("\"\n");
+        }
+    }
+
+    // Enemies
+    TArray<FString> EnemyIDs;
+    WorldCatalog->EnemyActors.GetKeys(EnemyIDs);
+    if (EnemyIDs.Num() > 0)
+    {
+        Summary += TEXT("  Enemies (type=SpawnEnemy, include count 1-4):\n");
+        for (const FString& ID : EnemyIDs)
+        {
+            Summary += TEXT("    - \"") + ID + TEXT("\"\n");
+        }
+    }
+
+    // Managers
+    TArray<FString> MgrIDs;
+    WorldCatalog->ManagerActors.GetKeys(MgrIDs);
+    if (MgrIDs.Num() > 0)
+    {
+        Summary += TEXT("  Managers (type=SpawnManager):\n");
+        for (const FString& ID : MgrIDs)
+        {
+            Summary += TEXT("    - \"") + ID + TEXT("\"\n");
+        }
+    }
+
+    if (Summary.IsEmpty())
+    {
+        return TEXT("  (catalog is empty! Fill DA_WorldCatalog)\n");
+    }
+
+    return Summary;
 }

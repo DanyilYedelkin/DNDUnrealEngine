@@ -38,7 +38,7 @@ public:
 
     /** Model to use */
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "AI|ChatGPT")
-    FString Model = TEXT("gpt-4o");
+    FString Model = TEXT("gpt-4o-mini");
 
     /** Seconds before falling back to Local AI */
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "AI|ChatGPT",

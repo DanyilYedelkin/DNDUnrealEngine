@@ -1,6 +1,10 @@
 // WorldBootstrapper.cpp
 #include "GameMaster/WorldBootstrapper.h"
+
+#include "HttpModule.h"
 #include "GameMaster/GameMasterSubsystem.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
 #include "Kismet/GameplayStatics.h"
 
 AWorldBootstrapper::AWorldBootstrapper()
@@ -72,8 +76,62 @@ void AWorldBootstrapper::SubscribeToSubsystem()
         this, &AWorldBootstrapper::OnGameMasterError);
 }
 
+FVector AWorldBootstrapper::FindSafeSpawnLocation() const
+{
+    UWorld* World = GetWorld();
+    if (!World) return FVector(0, 0, 100);
+
+    TArray<FVector> Candidates = {
+        FVector(  0,    0, 100),
+        FVector(200,    0, 100),
+        FVector( -200,  0, 100),
+        FVector(  0,  200, 100),
+        FVector(  0, -200, 100),
+        FVector(300,  300, 100),
+        FVector(-300, 300, 100),
+    };
+
+    FCollisionQueryParams Params;
+    Params.AddIgnoredActor(this);
+
+    for (const FVector& Candidate : Candidates)
+    {
+        FCollisionShape Sphere = FCollisionShape::MakeSphere(80.f);
+        bool bBlocked = World->OverlapBlockingTestByChannel(
+            Candidate,
+            FQuat::Identity,
+            ECC_Pawn,
+            Sphere,
+            Params);
+
+        if (!bBlocked)
+        {
+            UE_LOG(LogTemp, Log, 
+                TEXT("WorldBootstrapper: Safe spawn found at %s"), 
+                *Candidate.ToString());
+            return Candidate;
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, 
+        TEXT("WorldBootstrapper: No safe spawn found, using elevated fallback"));
+    return FVector(0, 0, 300);
+}
+
 void AWorldBootstrapper::TriggerLevelGeneration()
 {
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> TestReq =
+            FHttpModule::Get().CreateRequest();
+    TestReq->SetURL(TEXT("https://httpbin.org/get"));
+    TestReq->SetVerb(TEXT("GET"));
+    TestReq->OnProcessRequestComplete().BindLambda(
+        [](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("TEST HTTP: bOk=%d Code=%d"),
+                bOk, Resp.IsValid() ? Resp->GetResponseCode() : -1);
+        });
+    TestReq->ProcessRequest();
+    
     if (!GMSubsystem)
     {
         SetupSubsystem();

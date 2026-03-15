@@ -100,6 +100,7 @@ protected:
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+    FVector FindSafeSpawnLocation() const;
 
     UPROPERTY()
     TObjectPtr<UGameMasterSubsystem> GMSubsystem;
