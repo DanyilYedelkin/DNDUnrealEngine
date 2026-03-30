@@ -332,87 +332,78 @@ void UGameMasterSubsystem::EnsureSaveDataExists()
 FString UGameMasterSubsystem::BuildGMSystemPrompt_Implementation() const
 {
     FString Prompt;
+    
     Prompt += TEXT("You are an expert Dungeon Master for a D&D 5e game running in Unreal Engine 5.\n");
-    Prompt += TEXT("Your role is to create immersive worlds, compelling narratives, ");
-    Prompt += TEXT("react to player actions, and manage the campaign.\n\n");
+    Prompt += TEXT("Your role: create worlds, narrate stories, spawn characters, manage the campaign.\n\n");
 
-    Prompt += TEXT("CRITICAL: You MUST respond ONLY with valid JSON. No markdown, no explanation outside JSON.\n\n");
-
-    bool bIsDungeon = LevelSettings && LevelSettings->IsDungeon();
-
-    if (bIsDungeon)
-    {
-        Prompt += TEXT("MAP TYPE: DUNGEON (indoor)\n");
-        Prompt += TEXT("You create dungeon rooms and corridors by placing WALL BLOCKS.\n");
-        Prompt += TEXT("There is ONE wall prefab asset. You control its shape via 'scale' in the transform:\n");
-        Prompt += TEXT("  - Long corridor wall: scale x=8, y=1, z=2\n");
-        Prompt += TEXT("  - Short wall segment: scale x=2, y=1, z=2\n");
-        Prompt += TEXT("  - Wide room wall:     scale x=12, y=1, z=2\n");
-        Prompt += TEXT("  - Use yaw rotation (0=North, 90=East) to orient walls.\n");
-        Prompt += TEXT("  - Place walls to form rooms and corridors. Leave gaps for doors/entrances.\n");
-        Prompt += TEXT("  - Default scale (1,1,1) = one wall unit (~100x100x200 Unreal units).\n\n");
-    }
-    else
-    {
-        Prompt += TEXT("MAP TYPE: OPEN WORLD (outdoor)\n");
-        Prompt += TEXT("You scatter decorative prefabs across the landscape:\n");
-        Prompt += TEXT("  - Trees, rocks, bushes for natural terrain.\n");
-        Prompt += TEXT("  - Houses and ruins as decoration (NOT enterable buildings).\n");
-        Prompt += TEXT("  - Vary scale slightly (0.8-1.5) for natural variety.\n");
-        Prompt += TEXT("  - Spread objects across the entire map area.\n");
-        Prompt += TEXT("  - Leave open areas for combat and movement.\n\n");
-    }
+    Prompt += TEXT("CRITICAL: Respond ONLY with valid JSON. No markdown, no ```json, no text outside JSON.\n");
+    Prompt += TEXT("All property names and string values must use double quotes.\n");
+    Prompt += TEXT("Numbers must be plain numbers, not strings: {\"x\":0} not {\"x\":\"0\"}\n\n");
     
-    Prompt += TEXT("Respond with this exact JSON schema:\n");
+    Prompt += TEXT("REQUIRED JSON SCHEMA (follow exactly):\n");
     Prompt += TEXT("{\n");
-    Prompt += TEXT("  \"level_metadata\": { \"theme\": \"...\", \"seed\": 42 },\n");
-    Prompt += TEXT("  \"narration\": \"Opening scene description (2-4 sentences, immersive)\",\n");
+    Prompt += TEXT("  \"level_metadata\": {\"theme\":\"string\",\"seed\":42},\n");
+    Prompt += TEXT("  \"narration\": \"Opening scene description (2-3 sentences)\",\n");
     Prompt += TEXT("  \"actions\": [\n");
-
-    if (bIsDungeon)
-    {
-        Prompt += TEXT("    { \"type\": \"SpawnActor\", \"assetId\": \"Wall_A\",\n");
-        Prompt += TEXT("      \"transform\": {\"location\":{\"x\":0,\"y\":0,\"z\":0},\n");
-        Prompt += TEXT("                     \"rotation\":{\"pitch\":0,\"yaw\":0,\"roll\":0},\n");
-        Prompt += TEXT("                     \"scale\":{\"x\":8,\"y\":1,\"z\":2}} },\n");
-    }
-    else
-    {
-        Prompt += TEXT("    { \"type\": \"SpawnActor\", \"assetId\": \"Tree_A\",\n");
-        Prompt += TEXT("      \"transform\": {\"location\":{\"x\":500,\"y\":300,\"z\":0},\n");
-        Prompt += TEXT("                     \"rotation\":{\"pitch\":0,\"yaw\":45,\"roll\":0},\n");
-        Prompt += TEXT("                     \"scale\":{\"x\":1.2,\"y\":1.2,\"z\":1.2}} },\n");
-    }
-
-    Prompt += TEXT("    { \"type\": \"SpawnNPC\",    \"assetId\": \"Merchant_01\",\n");
-    Prompt += TEXT("      \"personaPrompt\": \"Describe the NPC personality and knowledge in 2-3 sentences.\",\n");
-    Prompt += TEXT("      \"transform\": {\"location\":{\"x\":200,\"y\":100,\"z\":0},\n");
-    Prompt += TEXT("                     \"rotation\":{\"pitch\":0,\"yaw\":180,\"roll\":0},\n");
-    Prompt += TEXT("                     \"scale\":{\"x\":1,\"y\":1,\"z\":1}} },\n");
-    Prompt += TEXT("    { \"type\": \"SpawnEnemy\",  \"assetId\": \"Goblin_A\", \"count\": 2,\n");
-    Prompt += TEXT("      \"transform\": {\"location\":{\"x\":-500,\"y\":0,\"z\":0},\n");
-    Prompt += TEXT("                     \"rotation\":{\"pitch\":0,\"yaw\":0,\"roll\":0},\n");
-    Prompt += TEXT("                     \"scale\":{\"x\":1,\"y\":1,\"z\":1}} },\n");
-    Prompt += TEXT("    { \"type\": \"SpawnManager\", \"assetId\": \"QuestManager\",\n");
-    Prompt += TEXT("      \"transform\": {\"location\":{\"x\":0,\"y\":0,\"z\":0},\n");
-    Prompt += TEXT("                     \"rotation\":{\"pitch\":0,\"yaw\":0,\"roll\":0},\n");
-    Prompt += TEXT("                     \"scale\":{\"x\":1,\"y\":1,\"z\":1}} },\n");
-    Prompt += TEXT("    { \"type\": \"SetQuest\", \"quest\": {\"questId\": \"q1\", \"title\": \"...\",\n");
-    Prompt += TEXT("      \"description\": \"...\", \"steps\": [{\"stepId\":\"s1\",\"description\":\"...\"}]} }\n");
+    Prompt += TEXT("    {\n");
+    Prompt += TEXT("      \"type\": \"SpawnActor\",\n");
+    Prompt += TEXT("      \"assetId\": \"EXACT_ID_FROM_LIST\",\n");
+    Prompt += TEXT("      \"transform\": {\n");
+    Prompt += TEXT("        \"location\": {\"x\":0.0, \"y\":0.0, \"z\":0.0},\n");
+    Prompt += TEXT("        \"rotation\": {\"pitch\":0.0, \"yaw\":0.0, \"roll\":0.0},\n");
+    Prompt += TEXT("        \"scale\":    {\"x\":1.0, \"y\":1.0, \"z\":1.0}\n");
+    Prompt += TEXT("      }\n");
+    Prompt += TEXT("    },\n");
+    Prompt += TEXT("    {\n");
+    Prompt += TEXT("      \"type\": \"SpawnNPC\",\n");
+    Prompt += TEXT("      \"assetId\": \"EXACT_NPC_ID_FROM_LIST\",\n");
+    Prompt += TEXT("      \"personaPrompt\": \"NPC personality in 2-3 sentences\",\n");
+    Prompt += TEXT("      \"transform\": {\"location\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"rotation\":{\"pitch\":0.0,\"yaw\":0.0,\"roll\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}\n");
+    Prompt += TEXT("    },\n");
+    Prompt += TEXT("    {\n");
+    Prompt += TEXT("      \"type\": \"SpawnEnemy\",\n");
+    Prompt += TEXT("      \"assetId\": \"EXACT_ENEMY_ID_FROM_LIST\",\n");
+    Prompt += TEXT("      \"count\": 2,\n");
+    Prompt += TEXT("      \"transform\": {\"location\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"rotation\":{\"pitch\":0.0,\"yaw\":0.0,\"roll\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}\n");
+    Prompt += TEXT("    },\n");
+    Prompt += TEXT("    {\n");
+    Prompt += TEXT("      \"type\": \"SpawnManager\",\n");
+    Prompt += TEXT("      \"assetId\": \"EXACT_MANAGER_ID_FROM_LIST\",\n");
+    Prompt += TEXT("      \"transform\": {\"location\":{\"x\":0.0,\"y\":0.0,\"z\":0.0},\"rotation\":{\"pitch\":0.0,\"yaw\":0.0,\"roll\":0.0},\"scale\":{\"x\":1.0,\"y\":1.0,\"z\":1.0}}\n");
+    Prompt += TEXT("    },\n");
+    Prompt += TEXT("    {\n");
+    Prompt += TEXT("      \"type\": \"SetQuest\",\n");
+    Prompt += TEXT("      \"quest\": {\n");
+    Prompt += TEXT("        \"questId\": \"q1\",\n");
+    Prompt += TEXT("        \"title\": \"Quest title\",\n");
+    Prompt += TEXT("        \"description\": \"Quest description\",\n");
+    Prompt += TEXT("        \"steps\": [{\"stepId\":\"s1\",\"description\":\"First step\"}]\n");
+    Prompt += TEXT("      }\n");
+    Prompt += TEXT("    }\n");
     Prompt += TEXT("  ],\n");
-    Prompt += TEXT("  \"memory_update\": { \"summary\": \"1-2 sentences about this location\", \"facts\": [] }\n");
+    Prompt += TEXT("  \"memory_update\": {\"summary\":\"1-2 sentences about this location\",\"facts\":[]}\n");
     Prompt += TEXT("}\n\n");
-    
+
+    Prompt += TEXT("ASSET RULES:\n");
+    Prompt += TEXT("- Use ONLY assetIds from the list below — no invented names\n");
+    Prompt += TEXT("- SpawnActor: use Environment assets for walls/floors/props\n");
+    Prompt += TEXT("- SpawnNPC: use ONLY NPC assets — you MUST spawn every NPC from the list\n");
+    Prompt += TEXT("- SpawnEnemy: use ONLY Enemy assets — you MUST spawn every Enemy type from the list\n");
+    Prompt += TEXT("- SpawnManager: use ONLY Manager assets — spawn all of them\n");
+    Prompt += TEXT("- NPC and Enemy scale must always be (1,1,1) — never scale characters\n\n");
+
     if (SaveData)
     {
         FString CampaignContext = SaveData->BuildGMContextString();
         if (!CampaignContext.IsEmpty())
         {
-            Prompt += TEXT("[CAMPAIGN MEMORY]:\n") + CampaignContext + TEXT("\n");
+            Prompt += TEXT("[CAMPAIGN MEMORY - use for narrative continuity]:\n");
+            Prompt += CampaignContext;
+            Prompt += TEXT("\n");
         }
     }
 
-    Prompt += TEXT("[AVAILABLE ASSET IDs — use ONLY these exact strings]:\n");
+    Prompt += TEXT("[AVAILABLE ASSET IDs — use EXACT strings, no changes]:\n");
     Prompt += GetCatalogSummaryForPrompt();
 
     return Prompt;
@@ -420,133 +411,47 @@ FString UGameMasterSubsystem::BuildGMSystemPrompt_Implementation() const
 
 FString UGameMasterSubsystem::BuildLevelGenerationPrompt_Implementation() const
 {
-    if (!LevelSettings)
-    {
-        return TEXT("Generate a small dungeon with 2 NPCs and 3 enemies. Return JSON only.");
-    }
+    if (!LevelSettings) 
+        return TEXT("Generate narration and characters for a dungeon. Return JSON.");
 
     FString Prompt;
-    Prompt += FString::Printf(TEXT("Generate a %s D&D level named \"%s\".\n"),
+    Prompt += FString::Printf(TEXT("Level: \"%s\", difficulty: %s, atmosphere: %s\n\n"),
+        *LevelSettings->LevelName,
         *LevelSettings->GetDifficultyString(),
-        *LevelSettings->LevelName);
+        *LevelSettings->Atmosphere);
 
-    Prompt += FString::Printf(TEXT("Atmosphere: %s\n"), *LevelSettings->Atmosphere);
-
-    // coordinates limits
-    Prompt += FString::Printf(
-        TEXT("World bounds (Unreal units): X[%.0f .. %.0f]  Y[%.0f .. %.0f]  Z[0 .. 400]\n"),
-        LevelSettings->WorldMin.X, LevelSettings->WorldMax.X,
-        LevelSettings->WorldMin.Y, LevelSettings->WorldMax.Y);
-
-    // limits
-    Prompt += FString::Printf(
-        TEXT("Spawn limits: max %d environment objects, max %d NPCs, max %d enemies.\n"),
-        LevelSettings->MaxEnvironmentActors,
-        LevelSettings->MaxNPCs,
-        LevelSettings->MaxEnemies);
-
-    // instructions for a map's type
     if (LevelSettings->IsDungeon())
     {
-        Prompt += TEXT("\n--- DUNGEON BUILDING RULES (read carefully) ---\n");
-        Prompt += TEXT("Asset 'Wall_Stone' is a cube: 100x100x100 Unreal Units at scale(1,1,1).\n");
-        Prompt += TEXT("scale(X,Y,Z) means the cube becomes X*100 x Y*100 x Z*100 UU.\n\n");
+        // Стены уже будут сгенерированы кодом — GPT только добавляет персонажей
+        Prompt += TEXT("The dungeon layout (walls/floors) is already built by the engine.\n");
+        Prompt += TEXT("Your job: add characters, quest, and narration.\n\n");
 
-        Prompt += TEXT("=== FLOOR ===\n");
-        Prompt += TEXT("Always ONE big floor per room. Flat, thin.\n");
-        Prompt += TEXT("scale: X=room_width, Y=room_depth, Z=0.5\n");
-        Prompt += TEXT("location Z = 0 (sits on ground level)\n\n");
-
-        Prompt += TEXT("=== WALLS ===\n");
-        Prompt += TEXT("Walls are THIN and TALL: thickness Y=0.5, height Z=5\n");
-        Prompt += TEXT("North/South walls: scale(room_width, 0.5, 5), run along X axis\n");
-        Prompt += TEXT("East/West walls:   scale(0.5, room_depth, 5), run along Y axis\n");
-        Prompt += TEXT("Wall center Z = 250 (= 5*100/2, sits on top of floor)\n\n");
-
-        Prompt += TEXT("=== WALL PLACEMENT FORMULA ===\n");
-        Prompt += TEXT("If room floor is at (cx, cy) with scale(W, D, 0.5):\n");
-        Prompt += TEXT("  North wall: location(cx,          cy + D*50 + 25, 250), scale(W,   0.5, 5)\n");
-        Prompt += TEXT("  South wall: location(cx,          cy - D*50 - 25, 250), scale(W,   0.5, 5)\n");
-        Prompt += TEXT("  East wall:  location(cx + W*50 + 25, cy,          250), scale(0.5, D,   5)\n");
-        Prompt += TEXT("  West wall:  location(cx - W*50 - 25, cy,          250), scale(0.5, D,   5)\n\n");
-
-        Prompt += TEXT("=== CONCRETE EXAMPLE: 20x20 room at origin ===\n");
-        Prompt += TEXT("Floor: location(0,0,0)       scale(20, 20, 0.5)\n");
-        Prompt += TEXT("North: location(0, 1025, 250) scale(20, 0.5, 5)\n");
-        Prompt += TEXT("South: location(0,-1025, 250) scale(20, 0.5, 5)\n");
-        Prompt += TEXT("East:  location(1025, 0, 250) scale(0.5, 20, 5)\n");
-        Prompt += TEXT("West:  location(-1025,0, 250) scale(0.5, 20, 5)\n\n");
-
-        Prompt += TEXT("=== CORRIDOR connecting two rooms ===\n");
-        Prompt += TEXT("Floor: scale(4, 10, 0.5) between room centers\n");
-        Prompt += TEXT("Left wall:  scale(0.5, 10, 5)\n");
-        Prompt += TEXT("Right wall: scale(0.5, 10, 5)\n");
-        Prompt += TEXT("NO end walls where corridor meets rooms (leave gap for passage)\n\n");
-
-        Prompt += TEXT("=== DOOR GAPS ===\n");
-        Prompt += TEXT("Where corridor connects to room: remove that wall segment.\n");
-        Prompt += TEXT("Replace one full wall with two half-walls leaving 300 UU gap in middle.\n");
-        Prompt += TEXT("Half-wall scale: (W/2 - 1.5, 0.5, 5), placed left and right of gap.\n\n");
-
-        Prompt += TEXT("=== GENERATE THIS LAYOUT ===\n");
-        Prompt += TEXT("Room 1 (start): 20x20, centered at (0, 0)\n");
-        Prompt += TEXT("Corridor:       4x12, going North from Room 1 center\n");
-        Prompt += TEXT("Room 2:         16x16, centered at (0, 2000)\n");
-        Prompt += TEXT("Corridor:       4x10, going East from Room 2\n");
-        Prompt += TEXT("Room 3:         12x12, centered at (1800, 2000)\n\n");
-
-        Prompt += TEXT("PLAYER START RULES:\n");
-        Prompt += TEXT("- Room 1 center (0,0) is the spawn point — NO walls within 300 UU of (0,0,0)\n");
-        Prompt += TEXT("- The very center of Room 1 must be completely open\n");
-        Prompt += TEXT("- Walls of Room 1 start at distance 500+ UU from center\n");
-        Prompt += TEXT("- Place NPCs in Room 2, enemies in Room 3 only\n");
-        Prompt += TEXT("- NEVER place any actor at location closer than 200 UU to (0,0)\n\n");
-        Prompt += TEXT("ALWAYS include floor for every room and corridor.\n");
-        Prompt += TEXT("DO NOT use rotation — use scale X/Y swap instead for orientation.\n");
-        Prompt += TEXT("Total actors: 20-30 (floors + walls).\n\n");
-    }
-    else
-    {
-        Prompt += TEXT("\n--- OPEN WORLD LAYOUT INSTRUCTIONS ---\n");
-        Prompt += TEXT("Scatter decorative prefabs naturally across the map:\n");
-        Prompt += TEXT("  * Use Tree/Rock/Bush assets for terrain decoration — vary positions.\n");
-        Prompt += TEXT("  * House assets are DECORATIONS only, no need to build interiors.\n");
-        Prompt += TEXT("  * Spread objects: don't cluster everything at origin.\n");
-        Prompt += TEXT("  * Vary scale between 0.7 and 1.5 for natural feel.\n");
-        Prompt += TEXT("  * Leave open flat areas (300+ units) for combat.\n");
-        Prompt += TEXT("  * Place NPCs near houses or points of interest.\n");
-        Prompt += TEXT("  * Place enemies at the edges or in dangerous-looking areas.\n\n");
+        Prompt += TEXT("ROOM LOCATIONS for character placement:\n");
+        Prompt += TEXT("  Room 1 (player start): center (0, 0, 100)\n");
+        Prompt += TEXT("  Room 2 (NPC room):     center (-2400, 0, 100)\n");
+        Prompt += TEXT("  Room 3 (enemy room):   center (-2400, -2400, 100)\n\n");
+        Prompt += TEXT("IMPORTANT: All NPC and Enemy Z location must be 100 or higher. Never spawn characters at Z=0.\n");
     }
 
-    // quest
+    Prompt += FString::Printf(
+        TEXT("Spawn limits: max %d NPCs, max %d enemies.\n"),
+        LevelSettings->MaxNPCs, LevelSettings->MaxEnemies);
+
     if (!LevelSettings->StartingQuestHint.IsEmpty())
-    {
-        Prompt += FString::Printf(TEXT("Starting quest theme: %s\n"),
-            *LevelSettings->StartingQuestHint);
-    }
+        Prompt += FString::Printf(TEXT("Quest theme: %s\n"), *LevelSettings->StartingQuestHint);
 
-    // Seed
-    if (LevelSettings->Seed != 0)
-    {
-        Prompt += FString::Printf(TEXT("Use seed %d for layout consistency.\n"), LevelSettings->Seed);
-    }
-
-    // managers
     if (LevelSettings->RequiredManagerIDs.Num() > 0)
     {
-        Prompt += TEXT("You MUST spawn these managers (use SpawnManager): ");
+        Prompt += TEXT("Required managers: ");
         for (const FString& ID : LevelSettings->RequiredManagerIDs)
-            Prompt += ID + TEXT(", ");
+            Prompt += ID + TEXT(" ");
         Prompt += TEXT("\n");
     }
-    
+
     if (!LevelSettings->ExtraGMInstructions.IsEmpty())
-    {
-        Prompt += TEXT("Extra instructions: ") + LevelSettings->ExtraGMInstructions + TEXT("\n");
-    }
+        Prompt += LevelSettings->ExtraGMInstructions + TEXT("\n");
 
-    Prompt += TEXT("\nIMPORTANT: Respond with ONLY valid JSON. No text before or after the JSON object.");
-
+    Prompt += TEXT("\nRespond ONLY with valid JSON.");
     return Prompt;
 }
 

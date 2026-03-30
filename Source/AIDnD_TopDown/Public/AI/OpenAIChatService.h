@@ -21,7 +21,7 @@ public:
 
 	// Cooldown в секундах между запросами на один NPC (анти-спам)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="OpenAI")
-	int32 MaxTokens = 1000;
+	int32 MaxTokens = 4000;
 	float CooldownSeconds = 2.0f;
 
 private:

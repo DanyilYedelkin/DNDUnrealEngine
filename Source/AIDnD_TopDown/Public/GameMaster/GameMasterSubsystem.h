@@ -77,7 +77,7 @@ public:
     /** Максимальный кол-во токенов на генерацию уровня */
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "GameMaster|Config",
         meta = (ClampMin = 500, ClampMax = 4000))
-    int32 LevelGenerationMaxTokens = 2500;
+    int32 LevelGenerationMaxTokens = 3500;
 
     /** Максимальный кол-во токенов на narrative response */
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "GameMaster|Config",

@@ -109,6 +109,7 @@ private:
 
     void SetupSubsystem();
     void SubscribeToSubsystem();
+    void SpawnDungeonGeometry();
 
     UFUNCTION()
     void OnLevelGenerationComplete(const FGMLevelGenerationResult& Result);

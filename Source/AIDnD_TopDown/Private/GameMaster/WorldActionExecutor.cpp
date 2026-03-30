@@ -298,8 +298,11 @@ void UWorldActionExecutor::ExecuteSpawnNPC(const FGMAction& Action, UWorld* Worl
             TEXT("NPC limit reached (%d)"), Settings->MaxNPCs));
         return;
     }
+    
+    FGMTransform FixedTransform = Action.SpawnTransform;
+    FixedTransform.Location.Z = FMath::Max(FixedTransform.Location.Z, 100.f);
 
-    AActor* Actor = SpawnFromCatalog(Action.AssetID, Action.SpawnTransform, World);
+    AActor* Actor = SpawnFromCatalog(Action.AssetID, FixedTransform, World);
     if (Actor)
     {
         SpawnedActors.Add(Actor);
@@ -339,6 +342,9 @@ void UWorldActionExecutor::ExecuteSpawnEnemy(const FGMAction& Action, UWorld* Wo
         }
 
         FGMTransform OffsetTransform = Action.SpawnTransform;
+        OffsetTransform.Location.Z = FMath::Max(OffsetTransform.Location.Z, 100.f); // добавь эту строку
+        OffsetTransform.Location.X += FMath::RandRange(-150.f, 150.f);
+        OffsetTransform.Location.Y += FMath::RandRange(-150.f, 150.f);
         OffsetTransform.Location += FVector(
             FMath::RandRange(-150.f, 150.f),
             FMath::RandRange(-150.f, 150.f),
