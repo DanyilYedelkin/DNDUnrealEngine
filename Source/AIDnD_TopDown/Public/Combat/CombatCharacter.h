@@ -151,6 +151,10 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Combat")
     ERollAdvantage GetDefenseAdvantage(bool bIsMeleeAttack = true) const;
 
+    /** Patrol points — assigned in the editor on the instance */
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "AI|Patrol")
+    TArray<TObjectPtr<AActor>> PatrolPoints;
+
 protected:
 
     virtual void BeginPlay() override;

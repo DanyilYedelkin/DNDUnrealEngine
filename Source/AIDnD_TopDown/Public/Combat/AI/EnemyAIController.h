@@ -122,6 +122,38 @@ public:
         meta = (DisplayName = "On AI Turn Ended"))
     void BP_OnTurnEnded();
 
+    // ============================================================
+    //  PATROL
+    // ============================================================
+
+    /** Patrol points **/
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "AI|Patrol")
+    TArray<AActor*> PatrolPoints;
+
+    /** Current patrol point index **/
+    UPROPERTY(BlueprintReadOnly, Category = "AI|Patrol")
+    int32 PatrolIndex = 0;
+
+    /** Returns the next patrol point **/
+    UFUNCTION(BlueprintCallable, Category = "AI|Patrol")
+    FVector GetNextPatrolPoint() const;
+
+    /** Moves on to the next point **/
+    UFUNCTION(BlueprintCallable, Category = "AI|Patrol")
+    void AdvancePatrolIndex();
+
+    /** True while the AI takes its turn **/
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "AI")
+    bool IsTurnActive() const { return bTurnActive; }
+
+    // ============================================================
+    //  BEHAVIOR TREE
+    // ============================================================
+
+    /** Behavior Tree asset **/
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "AI|BehaviorTree")
+    TObjectPtr<UBehaviorTree> BehaviorTreeAsset;
+
 protected:
 
     virtual void BeginPlay() override;

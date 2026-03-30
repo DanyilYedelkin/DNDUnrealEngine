@@ -20,6 +20,7 @@ public class AIDnD_TopDown : ModuleRules
 			"JsonUtilities",
 			"NavigationSystem", 
 			"AIModule",
+			"GameplayTasks",
 			"HTTP",         
 			"Json",    
 			"JsonUtilities",  

@@ -3,16 +3,14 @@
 #include "Combat/AI/LocalAIDecisionMaker.h"
 #include "Combat/CombatCharacter.h"
 #include "Combat/CombatStatsComponent.h"
-#include "Combat/ConditionComponent.h"
 #include "Combat/TurnManager.h"
-#include "Combat/MovementGridManager.h"
 #include "Combat/Actions/MeleeAttackAction.h"
 #include "Combat/Actions/UtilityActions.h"
 #include "Combat/CombatLog.h"
+#include "BehaviorTree/BehaviorTree.h"
+#include "BehaviorTree/BlackboardComponent.h"
 
 #include "Kismet/GameplayStatics.h"
-#include "NavigationSystem.h"
-#include "AITypes.h"
 
 AEnemyAIController::AEnemyAIController()
 {
@@ -23,6 +21,9 @@ AEnemyAIController::AEnemyAIController()
 void AEnemyAIController::BeginPlay()
 {
     Super::BeginPlay();
+
+    if (BehaviorTreeAsset)
+        RunBehaviorTree(BehaviorTreeAsset);
 
     // Instantiate decision maker
     if (DecisionMakerClass)
@@ -361,6 +362,26 @@ void AEnemyAIController::ExecuteDash(const FAIDecision& Decision)
     UE_LOG(LogCombat, Log,
         TEXT("EnemyAIController: %s dashes"),
         *ControlledCharacter->CharacterName.ToString());
+}
+
+FVector AEnemyAIController::GetNextPatrolPoint() const
+{
+    ACombatCharacter* Char =
+        Cast<ACombatCharacter>(GetPawn());
+    if (!Char || Char->PatrolPoints.IsEmpty())
+        return FVector::ZeroVector;
+
+    const int32 SafeIdx = PatrolIndex % Char->PatrolPoints.Num();
+    if (!Char->PatrolPoints[SafeIdx]) return FVector::ZeroVector;
+    return Char->PatrolPoints[SafeIdx]->GetActorLocation();
+}
+
+void AEnemyAIController::AdvancePatrolIndex()
+{
+    ACombatCharacter* Char =
+        Cast<ACombatCharacter>(GetPawn());
+    if (!Char || Char->PatrolPoints.IsEmpty()) return;
+    PatrolIndex = (PatrolIndex + 1) % Char->PatrolPoints.Num();
 }
 
 void AEnemyAIController::EndAITurn()
