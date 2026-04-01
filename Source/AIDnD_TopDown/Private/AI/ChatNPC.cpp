@@ -13,6 +13,10 @@ AChatNPC::AChatNPC()
     InteractionSphere->SetSphereRadius(200.f);
     InteractionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
     InteractionSphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+
+    TrustComponent = CreateDefaultSubobject<UTrustComponent>(TEXT("TrustComponent"));
+    TradeComponent = CreateDefaultSubobject<UNPCTradeComponent>(TEXT("TradeComponent"));
+    QuestComponent = CreateDefaultSubobject<UNPCQuestComponent>(TEXT("QuestComponent"));
 }
 
 void AChatNPC::BeginPlay()
@@ -182,4 +186,23 @@ void AChatNPC::OnNPCError(const FString& Error)
 {
     UE_LOG(LogTemp, Warning, TEXT("[ChatNPC] Error for %s: %s"), *NPCID, *Error);
     OnResponseReceived.Broadcast(FString::Printf(TEXT("[Ошибка: %s]"), *Error));
+}
+
+void AChatNPC::SendPlayerMessageWithContext(const FString& PlayerText)
+{
+    if (PlayerText.IsEmpty()) return;
+    
+    FString Context;
+
+    if (TrustComponent)
+        Context += TrustComponent->BuildMemoryContextString();
+
+    if (QuestComponent)
+        Context += QuestComponent->BuildQuestContextString();
+
+    if (UChatManagerSubsystem* Sub = GetGameInstance()->
+        GetSubsystem<UChatManagerSubsystem>())
+    {
+        Sub->SendMessageWithContext(NPCID, PlayerText, SystemPrompt, Context);
+    }
 }

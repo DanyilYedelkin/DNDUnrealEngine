@@ -56,7 +56,13 @@ public:
     int32 MaxRecentMessages = 20;
 
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="NPC Chat|Memory")
-    int32 SummarizationThreshold = 30; // после скольких сообщений делаем summary
+    int32 SummarizationThreshold = 30;
+
+    UFUNCTION(BlueprintCallable, Category="NPC Chat")
+    void SendMessageWithContext(const FString& NPCID,
+                                const FString& PlayerText,
+                                const FString& BaseSystemPrompt,
+                                const FString& AdditionalContext);
 
 private:
     UPROPERTY()

@@ -138,6 +138,23 @@ TArray<FChatMessage> UChatManagerSubsystem::GetRecentMessages(const FString& NPC
     return SaveGameData->NPCMemories[NPCID].RecentMessages;
 }
 
+void UChatManagerSubsystem::SendMessageWithContext(
+    const FString& NPCID,
+    const FString& PlayerText,
+    const FString& BaseSystemPrompt,
+    const FString& AdditionalContext)
+{
+    FString EnrichedPrompt = BaseSystemPrompt;
+    if (!AdditionalContext.IsEmpty())
+    {
+        EnrichedPrompt += TEXT("\n\n--- NPC RELATIONSHIP CONTEXT ---\n");
+        EnrichedPrompt += AdditionalContext;
+        EnrichedPrompt += TEXT("--- END CONTEXT ---");
+    }
+    
+    SendMessage(NPCID, PlayerText, EnrichedPrompt);
+}
+
 void UChatManagerSubsystem::RequestSummaryUpdate(const FString& NPCID)
 {
     // Запрашиваем у OpenAI краткое саммари истории
