@@ -2,7 +2,9 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "ChatInteractable.h"
-#include "ChatTypes.h"
+#include "NPC/UTrustComponent.h"
+#include "NPC/UNPCTradeComponent.h"
+#include "NPC/UNPCQuestComponent.h"
 #include "ChatNPC.generated.h"
 
 class UWidgetComponent;
@@ -75,6 +77,18 @@ public:
 
     UFUNCTION(BlueprintPure, Category="NPC Chat")
     bool IsChatOpen() const { return bChatOpen; }
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="NPC|Systems")
+    UTrustComponent* TrustComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="NPC|Systems")
+    UNPCTradeComponent* TradeComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="NPC|Systems")
+    UNPCQuestComponent* QuestComponent;
+    
+    UFUNCTION(BlueprintCallable, Category="NPC Chat")
+    void SendPlayerMessageWithContext(const FString& PlayerText);
 
     // IChatInteractable
     virtual void OnInteract_Implementation(APawn* InstigatorPawn) override;

@@ -10,21 +10,16 @@
 void UOpenAIChatService::Initialize()
 {
     APIKey = LoadAPIKeyFromConfig();
-    // TODO: вынести в конфиг или параметр
     ModelName = TEXT("gpt-4o-mini");
     EndpointURL = TEXT("https://api.openai.com/v1/chat/completions");
 }
 
 FString UOpenAIChatService::LoadAPIKeyFromConfig() const
 {
-    // Читаем из DefaultGame.ini секции [OpenAI]
-    // В репозиторий кладём ТОЛЬКО заглушку, реальный ключ — в локальный
-    // Config/DefaultGame.ini или переменную окружения (см. секцию безопасности)
     FString Key;
     GConfig->GetString(TEXT("OpenAI"), TEXT("APIKey"), Key, GGameIni);
     if (Key.IsEmpty())
     {
-        // Fallback: переменная окружения OPENAI_API_KEY
         Key = FPlatformMisc::GetEnvironmentVariable(TEXT("OPENAI_API_KEY"));
     }
     if (Key.IsEmpty())
@@ -68,11 +63,10 @@ void UOpenAIChatService::SendChatRequest(const TArray<FChatMessage>& Messages,
 {
     double Now = FPlatformTime::Seconds();
 
-    // ЗАМЕНИ ВСЕ ПРОВЕРКИ В НАЧАЛЕ НА ЭТО:
     if (bRequestInFlight)
     {
         UE_LOG(LogTemp, Warning, TEXT("Forcing reset of stuck request"));
-        bRequestInFlight = false; // принудительно сбрасываем
+        bRequestInFlight = false;
     }
 
     if ((Now - LastRequestTime) < CooldownSeconds)
@@ -87,15 +81,13 @@ void UOpenAIChatService::SendChatRequest(const TArray<FChatMessage>& Messages,
     }
 
     bRequestInFlight = true;
-    LastRequestTime = Now;
+    LastRequestTime  = Now;  
 
-    // Сериализация JSON
     TSharedPtr<FJsonObject> RequestBody = BuildRequestBody(Messages);
     FString BodyString;
     auto Writer = TJsonWriterFactory<>::Create(&BodyString);
     FJsonSerializer::Serialize(RequestBody.ToSharedRef(), Writer);
 
-    // HTTP запрос
     if (ActiveRequest.IsValid())
     {
         ActiveRequest->CancelRequest();
@@ -116,14 +108,15 @@ void UOpenAIChatService::SendChatRequest(const TArray<FChatMessage>& Messages,
     HttpRequest->OnProcessRequestComplete().BindUObject(
         this, &UOpenAIChatService::OnResponseReceived,
         OnSuccess, OnError);
-
-    // test...
-    UE_LOG(LogTemp, Warning, TEXT("=== SENDING HTTP REQUEST TO: %s ==="), *EndpointURL);
-    UE_LOG(LogTemp, Warning, TEXT("=== API KEY LENGTH: %d ==="), APIKey.Len());
-    UE_LOG(LogTemp, Warning, TEXT("=== BODY LENGTH: %d chars ==="), BodyString.Len());
-    HttpRequest->ProcessRequest();
     
-    HttpRequest->ProcessRequest();
+    FString RequestType = (MaxTokens >= 1000)
+        ? TEXT("LevelGeneration")
+        : (MaxTokens >= 200 ? TEXT("NPCDialogue") : TEXT("CombatAI"));
+    UE_LOG(LogTemp, Warning,
+        TEXT("[LATENCY] >>> Request START | type=%s | bodyLen=%d chars"),
+        *RequestType, BodyString.Len());
+
+    HttpRequest->ProcessRequest(); 
 }
 
 void UOpenAIChatService::OnResponseReceived(FHttpRequestPtr Request,
@@ -132,11 +125,18 @@ void UOpenAIChatService::OnResponseReceived(FHttpRequestPtr Request,
                                              FOnChatSuccess OnSuccess,
                                              FOnChatError   OnError)
 {
+    double ElapsedMs = (FPlatformTime::Seconds() - LastRequestTime) * 1000.0;
+    UE_LOG(LogTemp, Warning,
+        TEXT("[LATENCY] <<< Response received | elapsed=%.0f ms | success=%s"),
+        ElapsedMs, bSuccess ? TEXT("true") : TEXT("false"));
+
     bRequestInFlight = false;
     ActiveRequest.Reset();
 
     if (!bSuccess || !Response.IsValid())
     {
+        UE_LOG(LogTemp, Error,
+            TEXT("[LATENCY] Request FAILED after %.0f ms"), ElapsedMs);
         OnError.ExecuteIfBound(TEXT("Network error or timeout."));
         return;
     }
@@ -144,12 +144,13 @@ void UOpenAIChatService::OnResponseReceived(FHttpRequestPtr Request,
     int32 StatusCode = Response->GetResponseCode();
     if (StatusCode != 200)
     {
+        UE_LOG(LogTemp, Error,
+            TEXT("[LATENCY] HTTP %d after %.0f ms"), StatusCode, ElapsedMs);
         OnError.ExecuteIfBound(FString::Printf(
             TEXT("HTTP %d: %s"), StatusCode, *Response->GetContentAsString()));
         return;
     }
 
-    // Парсинг ответа
     TSharedPtr<FJsonObject> JsonResponse;
     TSharedRef<TJsonReader<>> Reader =
         TJsonReaderFactory<>::Create(Response->GetContentAsString());
@@ -160,7 +161,6 @@ void UOpenAIChatService::OnResponseReceived(FHttpRequestPtr Request,
         return;
     }
 
-    // Извлекаем: choices[0].message.content
     const TArray<TSharedPtr<FJsonValue>>* Choices;
     if (!JsonResponse->TryGetArrayField(TEXT("choices"), Choices) ||
         Choices->Num() == 0)
@@ -172,6 +172,10 @@ void UOpenAIChatService::OnResponseReceived(FHttpRequestPtr Request,
     TSharedPtr<FJsonObject> FirstChoice = (*Choices)[0]->AsObject();
     TSharedPtr<FJsonObject> Message = FirstChoice->GetObjectField(TEXT("message"));
     FString Content = Message->GetStringField(TEXT("content"));
+
+    UE_LOG(LogTemp, Warning,
+        TEXT("[LATENCY] SUCCESS | elapsed=%.0f ms | responseLen=%d chars"),
+        ElapsedMs, Content.Len());
 
     OnSuccess.ExecuteIfBound(Content.TrimStartAndEnd());
 }
