@@ -52,6 +52,6 @@ protected:
 	UFUNCTION()
 	void OnInputCommitted(const FText& Text, ETextCommit::Type CommitMethod);
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category="Chat Widget")
 	class AChatNPC* OwnerNPC = nullptr;
 };
