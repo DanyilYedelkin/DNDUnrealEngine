@@ -50,6 +50,9 @@ public:
     TSubclassOf<UUserWidget> InteractPromptWidgetClass;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NPC|UI")
+    TSubclassOf<UUserWidget> TradeWidgetClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NPC|UI")
     UTexture2D* NPCPortrait = nullptr;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="NPC|Audio")
@@ -90,12 +93,30 @@ public:
     UFUNCTION(BlueprintCallable, Category="NPC Chat")
     void SendPlayerMessageWithContext(const FString& PlayerText);
 
+    UFUNCTION(BlueprintCallable, Category="NPC Trade")
+    void OpenTrade();
+
+    UFUNCTION(BlueprintCallable, Category="NPC Trade")
+    void CloseTrade();
+
+    UFUNCTION(BlueprintPure, Category="NPC Trade")
+    bool IsTradeOpen() const { return bTradeOpen; }
+
+    UPROPERTY(BlueprintAssignable, Category="NPC Trade")
+    FOnChatOpenedDelegate OnTradeOpened;
+
+    UPROPERTY(BlueprintAssignable, Category="NPC Trade")
+    FOnChatClosedDelegate OnTradeClosed;
+
     // IChatInteractable
     virtual void OnInteract_Implementation(APawn* InstigatorPawn) override;
     virtual void OnPlayerEnterRange_Implementation(APawn* PlayerPawn) override;
     virtual void OnPlayerExitRange_Implementation(APawn* PlayerPawn) override;
 
 protected:
+    UPROPERTY(BlueprintReadOnly, Category="NPC Trade")
+    UUserWidget* TradeWidgetInstance = nullptr;
+    
     UPROPERTY(VisibleAnywhere, Category="NPC")
     USphereComponent* InteractionSphere;
 
@@ -127,4 +148,7 @@ protected:
 
     UFUNCTION()
     void OnNPCError(const FString& Error);
+
+private:
+    bool bTradeOpen = false;
 };

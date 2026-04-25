@@ -53,6 +53,11 @@ public:
     /** open location or a dungeon */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level|Type")
     EMapType MapType = EMapType::Dungeon;
+    
+    /** Number of dungeon rooms to generate (player-configurable) */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level|Dungeon",
+        meta = (ClampMin = 2, ClampMax = 8))
+    int32 NumRooms = 3;
 
     // ---- Basic parameters ----
 

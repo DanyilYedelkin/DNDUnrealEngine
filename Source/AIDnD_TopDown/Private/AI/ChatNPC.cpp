@@ -176,6 +176,57 @@ void AChatNPC::SendPlayerMessage(const FString& PlayerText)
     }
 }
 
+void AChatNPC::OpenTrade()
+{
+    if (bTradeOpen || !TradeWidgetClass) return;
+    bTradeOpen = true;
+
+    APlayerController* PC = nullptr;
+    if (CurrentInteractingPawn)
+        PC = Cast<APlayerController>(
+            CurrentInteractingPawn->GetController());
+    if (!PC)
+        PC = UGameplayStatics::GetPlayerController(this, 0);
+    if (!PC) return;
+
+    TradeWidgetInstance = CreateWidget<UUserWidget>(PC, TradeWidgetClass);
+    if (TradeWidgetInstance)
+    {
+        if (UFunction* Func = TradeWidgetInstance->
+            FindFunction(TEXT("InitTrade")))
+        {
+            struct { AChatNPC* NPC; } Params;
+            Params.NPC = this;
+            TradeWidgetInstance->ProcessEvent(Func, &Params);
+        }
+        TradeWidgetInstance->AddToViewport(10);
+        PC->SetInputMode(FInputModeGameAndUI());
+        PC->bShowMouseCursor = true;
+    }
+    OnTradeOpened.Broadcast();
+}
+
+void AChatNPC::CloseTrade()
+{
+    if (!bTradeOpen) return;
+    bTradeOpen = false;
+
+    if (TradeWidgetInstance)
+    {
+        TradeWidgetInstance->RemoveFromParent();
+        TradeWidgetInstance = nullptr;
+    }
+
+    APlayerController* PC =
+        UGameplayStatics::GetPlayerController(this, 0);
+    if (PC)
+    {
+        PC->SetInputMode(FInputModeGameOnly());
+        PC->bShowMouseCursor = false;
+    }
+    OnTradeClosed.Broadcast();
+}
+
 void AChatNPC::OnNPCResponse(const FString& ResponseNPCID, const FString& Response)
 {
     if (ResponseNPCID != NPCID) return;
